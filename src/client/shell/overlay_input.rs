@@ -569,6 +569,34 @@ impl ClientShellState {
             return;
         }
 
+        if matches!(self.overlay, Some(ClientShellOverlay::MakiSessions(_))) {
+            let (code, modifiers) = crate::config::normalize_key_combo((key.code, key.modifiers));
+            match code {
+                KeyCode::Esc => {
+                    self.overlay = None;
+                    outcome.repaint = true;
+                }
+                KeyCode::Up | KeyCode::Char('k') if modifiers.is_empty() => {
+                    self.move_maki_sessions_selection(-1);
+                    outcome.repaint = true;
+                }
+                KeyCode::Down | KeyCode::Char('j') if modifiers.is_empty() => {
+                    self.move_maki_sessions_selection(1);
+                    outcome.repaint = true;
+                }
+                KeyCode::Enter => self.accept_maki_sessions(outcome),
+                KeyCode::Char('d') if modifiers.is_empty() => {
+                    self.press_maki_sessions_delete(outcome);
+                }
+                KeyCode::Char('r') if modifiers.is_empty() => {
+                    self.refresh_maki_sessions();
+                    outcome.repaint = true;
+                }
+                _ => {}
+            }
+            return;
+        }
+
         if matches!(self.overlay, Some(ClientShellOverlay::GlobalMenu(_))) {
             match key.code {
                 KeyCode::Esc => {

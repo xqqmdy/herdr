@@ -396,6 +396,12 @@ pub(crate) fn hostname() -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+pub(crate) fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
 pub(crate) fn local_datetime() -> Option<time::PrimitiveDateTime> {
     let mut timestamp: libc::time_t = 0;
     if unsafe { libc::time(&mut timestamp) } == -1 {

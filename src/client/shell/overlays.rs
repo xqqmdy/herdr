@@ -67,6 +67,7 @@ pub(crate) fn render_client_overlay(
         ClientShellOverlay::Navigator(v) => {
             render_navigator_overlay(b, v, endpoints, active_endpoint_id, p)
         }
+        ClientShellOverlay::MakiSessions(v) => render_maki_sessions_overlay(b, v, p),
         ClientShellOverlay::Settings(v) => {
             settings_overlay::render_settings_overlay(b, v, s.integration_updates_available, p)
         }
@@ -1032,6 +1033,123 @@ fn render_navigator_overlay(
         worktree_search: Rect::default(),
         worktree_rows: Vec::new(),
         cursor,
+        ..OverlayRender::default()
+    })
+}
+
+fn render_maki_sessions_overlay(
+    b: &mut Buffer,
+    o: &ClientMakiSessionsOverlay,
+    p: &Palette,
+) -> Option<OverlayRender> {
+    let a = b.area;
+    let width = a.width.saturating_sub(4).min(96);
+    let height = a.height.saturating_sub(2).min(28);
+    if width < 4 || height < 8 {
+        return None;
+    }
+    let q = Rect::new(
+        a.x + (a.width - width) / 2,
+        a.y + (a.height - height) / 2,
+        width,
+        height,
+    )
+    .intersection(a);
+    let i = panel(b, q, p.accent, p.panel_bg)?;
+    put_text(
+        b,
+        q.x + 2,
+        q.y,
+        q.width.saturating_sub(4),
+        " Maki sessions ",
+        Style::default().fg(p.accent).bg(p.panel_bg),
+    );
+    put_text(
+        b,
+        i.x,
+        i.y + 1,
+        i.width,
+        &"─".repeat(i.width as usize),
+        Style::default().fg(p.surface1).bg(p.panel_bg),
+    );
+    let body = Rect::new(i.x, i.y + 2, i.width, i.height.saturating_sub(4));
+    let last = o.sessions.len().saturating_sub(1);
+    let selected = o.selected.min(last);
+    let scroll = o
+        .scroll
+        .max(selected.saturating_sub(body.height.saturating_sub(1) as usize))
+        .min(selected);
+    if o.sessions.is_empty() {
+        put_text(
+            b,
+            body.x,
+            body.y,
+            body.width,
+            " no maki sessions found",
+            Style::default().fg(p.overlay0).bg(p.panel_bg),
+        );
+    }
+    for (ix, session) in o
+        .sessions
+        .iter()
+        .enumerate()
+        .skip(scroll)
+        .take(body.height as usize)
+    {
+        let rect = Rect::new(body.x, body.y + (ix - scroll) as u16, body.width, 1);
+        let is_selected = ix == selected;
+        let st = if is_selected {
+            Style::default()
+                .fg(contrast(p))
+                .bg(p.accent)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(p.text).bg(p.panel_bg)
+        };
+        b.set_style(rect, st);
+        let title = format!(" {}", session.title);
+        put_text(b, rect.x, rect.y, rect.width, &title, st);
+        let right = if is_selected && o.confirm_delete {
+            "delete? enter confirms ".to_owned()
+        } else {
+            let short_id = session.id.get(..8).unwrap_or(&session.id);
+            format!(
+                "{} · {} · ",
+                crate::maki_sessions::relative_age(session.updated_at, o.now),
+                short_id
+            )
+        };
+        put_right_text(b, rect, rect.y, &right, st);
+    }
+    if let Some(session) = o.sessions.get(selected) {
+        put_text(
+            b,
+            i.x,
+            i.bottom() - 2,
+            i.width,
+            &format!(" {}", session.cwd),
+            Style::default().fg(p.subtext0).bg(p.panel_bg),
+        );
+    }
+    if let Some(status) = &o.status {
+        put_right_text(
+            b,
+            Rect::new(i.x, i.bottom() - 2, i.width, 1),
+            i.bottom() - 2,
+            &format!("{status} "),
+            Style::default().fg(p.overlay0).bg(p.panel_bg),
+        );
+    }
+    put_text(
+        b,
+        i.x,
+        i.bottom() - 1,
+        i.width,
+        " enter resume · d delete · r refresh · esc close",
+        Style::default().fg(p.overlay0).bg(p.panel_bg),
+    );
+    Some(OverlayRender {
+        area: q,
         ..OverlayRender::default()
     })
 }

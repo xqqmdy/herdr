@@ -119,6 +119,10 @@ fn shell_quote(value: &str) -> String {
 /// Unsupported platform stub.
 pub fn raise_server_nofile_limit() {}
 
+pub(crate) fn maki_data_dirs_platform() -> Vec<PathBuf> {
+    Vec::new()
+}
+
 pub(crate) fn should_draw_host_cursor_by_default() -> bool {
     false
 }

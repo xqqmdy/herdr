@@ -914,6 +914,17 @@ impl ProcessSnapshot {
 
 pub fn raise_server_nofile_limit() {}
 
+pub(crate) fn maki_data_dirs_platform() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(appdata) = std::env::var_os("APPDATA").filter(|value| !value.is_empty()) {
+        dirs.push(PathBuf::from(appdata).join("maki"));
+    }
+    if let Some(home) = std::env::var_os("USERPROFILE").filter(|value| !value.is_empty()) {
+        dirs.push(PathBuf::from(home).join(".maki"));
+    }
+    dirs
+}
+
 pub(crate) fn apply_pane_runtime_marker_platform(command: &mut portable_pty::CommandBuilder) {
     if command_uses_git_bash(command) {
         command.env(PANE_RUNTIME_MARKER_ENV_VAR, next_pane_runtime_marker());

@@ -16,7 +16,7 @@ use super::{
 
 pub(crate) use super::unix_common::{
     configure_status_command, create_remote_private_dir, create_remote_ssh_config_dir,
-    create_remote_ssh_config_file, hostname, local_datetime, remote_bridge_endpoint_path,
+    create_remote_ssh_config_file, home_dir, hostname, local_datetime, remote_bridge_endpoint_path,
     remote_private_temp_base, remote_reattach_argument, remote_reattach_program,
     remote_ssh_config_paths, set_default_plugin_pane_pwd, shutdown_client_stream,
     status_commands_supported, wait_client_stream_readable, write_client_stream,
@@ -239,6 +239,17 @@ fn copy_config_xattrs(source: RawFd, destination: RawFd) -> std::io::Result<()> 
 }
 
 pub fn raise_server_nofile_limit() {}
+
+pub(crate) fn maki_data_dirs_platform() -> Vec<PathBuf> {
+    let Some(home) = home_dir() else {
+        return Vec::new();
+    };
+    let data_home = match std::env::var_os("XDG_DATA_HOME") {
+        Some(value) if !value.is_empty() => PathBuf::from(value),
+        _ => home.join(".local").join("share"),
+    };
+    vec![data_home.join("maki"), home.join(".maki")]
+}
 
 pub(crate) fn should_draw_host_cursor_by_default() -> bool {
     running_inside_wsl()

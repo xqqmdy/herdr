@@ -542,6 +542,12 @@
           "description": "Open the session navigator."
         },
         {
+          "key": "keys.maki_sessions",
+          "type": "keybinding",
+          "default": "\"prefix+m\"",
+          "description": "Browse and resume maki sessions."
+        },
+        {
           "key": "keys.navigate_workspace_up",
           "type": "keybinding",
           "default": "\"up\"",

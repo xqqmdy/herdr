@@ -31,6 +31,7 @@ mod ipc;
 mod kitty_graphics;
 mod layout;
 mod logging;
+mod maki_sessions;
 mod metadata_tokens;
 mod noninteractive_process;
 mod pane;
@@ -149,6 +150,7 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # open_notification_target = "prefix+o"
 # workspace_picker = "prefix+w"
 # goto = "prefix+g"
+# maki_sessions = "prefix+m"
 # new_workspace = "prefix+shift+n"
 # new_worktree = "prefix+shift+g"
 # open_worktree = ""    # optional, unset by default

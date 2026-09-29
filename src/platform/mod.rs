@@ -121,6 +121,10 @@ pub(crate) fn normalize_cwd_for_launch(path: &std::path::Path) -> std::path::Pat
     normalize_cwd_for_launch_platform(path)
 }
 
+pub(crate) fn maki_data_dirs() -> Vec<std::path::PathBuf> {
+    maki_data_dirs_platform()
+}
+
 #[cfg(not(windows))]
 fn normalize_cwd_for_launch_platform(path: &std::path::Path) -> std::path::PathBuf {
     path.to_path_buf()
@@ -331,7 +335,7 @@ mod unix_common;
 pub(crate) mod unix_image_files;
 #[cfg(unix)]
 pub(crate) use unix_common::{
-    begin_cli_output, end_cli_output, forward_remote_bridge_stdio, RemoteBridgeWake,
+    begin_cli_output, end_cli_output, forward_remote_bridge_stdio, home_dir, RemoteBridgeWake,
 };
 
 mod client_state;

@@ -78,6 +78,7 @@ pub(crate) fn keybind_help_groups(
                     binding_label(&keybinds.open_notification_target),
                     "open notification target",
                 ),
+                entry(binding_label(&keybinds.maki_sessions), "maki sessions"),
             ],
         ),
         (

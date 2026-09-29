@@ -291,6 +291,7 @@ pub(super) enum ClientShellOverlayKind {
     ContextMenu,
     GlobalMenu,
     Settings,
+    MakiSessions,
 }
 
 #[derive(Debug)]
@@ -569,6 +570,16 @@ pub(super) struct ClientTabCloseConfirmation {
 }
 
 #[derive(Debug)]
+pub(super) struct ClientMakiSessionsOverlay {
+    pub(super) sessions: Vec<crate::maki_sessions::MakiSession>,
+    pub(super) now: u64,
+    pub(super) selected: usize,
+    pub(super) scroll: usize,
+    pub(super) confirm_delete: bool,
+    pub(super) status: Option<String>,
+}
+
+#[derive(Debug)]
 pub(super) struct ClientConfirmCloseOverlay {
     pub(super) workspace_id: String,
     pub(super) tab_target: Option<ClientTabCloseConfirmation>,
@@ -591,6 +602,7 @@ pub(super) enum ClientShellOverlay {
     ContextMenu(ClientContextMenuOverlay),
     GlobalMenu(ClientGlobalMenuOverlay),
     Settings(ClientSettingsOverlay),
+    MakiSessions(ClientMakiSessionsOverlay),
 }
 
 impl ClientShellOverlay {
@@ -609,6 +621,7 @@ impl ClientShellOverlay {
             Self::ContextMenu(_) => ClientShellOverlayKind::ContextMenu,
             Self::GlobalMenu(_) => ClientShellOverlayKind::GlobalMenu,
             Self::Settings(_) => ClientShellOverlayKind::Settings,
+            Self::MakiSessions(_) => ClientShellOverlayKind::MakiSessions,
         }
     }
 }
