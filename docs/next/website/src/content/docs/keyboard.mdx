@@ -88,6 +88,12 @@ Press `prefix+[` to enter copy mode for the focused pane. Use `h/j/k/l`, tmux-st
 
 Mouse drag selections and selections started with `v`, Space, or `V` remain active during output and redraws, including when part of the selected range is outside the viewport. Copy reads the current text in that range, not a frozen snapshot. Resizing the pane or switching between its normal and alternate screens still clears the selection. Search results and double-click word selections retain their content-change checks.
 
+## Vim mode
+
+Herdr uses a vim-style mode layer by default. The client starts in NORMAL mode: every keypress resolves through your prefix bindings (including indexed and custom commands) without typing the prefix, unmatched keys are swallowed, and the prefix key itself has no special meaning. Press `i` (configurable via `keys.vim_insert`) to enter INSERT mode and type into the focused pane; type `jj` (`keys.vim_normal`, a single key like `esc` also works) to return to NORMAL mode. The mode bar shows `NORMAL` / `INSERT`.
+
+NORMAL mode also layers nvim-style action keys over the prefix bindings, configurable under `[keys.normal]`: `ctrl+h/j/k/l` move pane focus, `h`/`l` switch tabs, `j`/`k` switch workspaces, `t` opens a tab, `x` closes the pane, `-` and `V` split down and right, `v` enters visual mode, `z` zooms, `?` opens keybind help, `m` opens the maki session browser, `q` detaches, and `,` renames the tab. Set any of them to an empty string to disable it.
+
 ## Change anything
 
 Every binding is configurable, including the prefix itself:

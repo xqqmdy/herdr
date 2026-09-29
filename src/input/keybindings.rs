@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use crate::config::{CustomCommandKeybind, Keybinds};
+use crate::config::{CustomCommandKeybind, KeyCombo, Keybinds};
 
 use super::TerminalKey;
 
@@ -27,7 +27,6 @@ pub(crate) enum KeybindAction {
     SwitchWorkspace(usize),
     SwitchTab(usize),
     FocusAgent(usize),
-    WorkspacePicker,
     PreviousWorkspace,
     NextWorkspace,
     PreviousAgent,
@@ -91,6 +90,41 @@ pub(crate) fn resolve_prefix_binding(
     })
 }
 
+/// NORMAL-mode key overrides, resolved before the prefix binding table.
+pub(crate) fn resolve_vim_normal_action(
+    keys: &crate::config::VimNormalKeys,
+    key: &TerminalKey,
+) -> Option<KeybindAction> {
+    let matches = |combo: Option<KeyCombo>, action: KeybindAction| {
+        combo
+            .is_some_and(|combo| crate::config::terminal_key_matches_combo(key, combo))
+            .then_some(action)
+    };
+    let k = keys;
+    [
+        (k.focus_left, KeybindAction::FocusPaneLeft),
+        (k.focus_down, KeybindAction::FocusPaneDown),
+        (k.focus_up, KeybindAction::FocusPaneUp),
+        (k.focus_right, KeybindAction::FocusPaneRight),
+        (k.previous_tab, KeybindAction::PreviousTab),
+        (k.next_tab, KeybindAction::NextTab),
+        (k.previous_workspace, KeybindAction::PreviousWorkspace),
+        (k.next_workspace, KeybindAction::NextWorkspace),
+        (k.new_tab, KeybindAction::NewTab),
+        (k.close_pane, KeybindAction::ClosePane),
+        (k.split_down, KeybindAction::SplitHorizontal),
+        (k.split_right, KeybindAction::SplitVertical),
+        (k.visual_mode, KeybindAction::CopyMode),
+        (k.zoom, KeybindAction::Zoom),
+        (k.help, KeybindAction::Help),
+        (k.maki_sessions, KeybindAction::OpenMakiSessions),
+        (k.detach, KeybindAction::Detach),
+        (k.rename_tab, KeybindAction::RenameTab),
+    ]
+    .into_iter()
+    .find_map(|(combo, action)| matches(combo, action))
+}
+
 pub(crate) fn resolve_non_indexed_action(
     keybinds: &Keybinds,
     key: &TerminalKey,
@@ -99,7 +133,6 @@ pub(crate) fn resolve_non_indexed_action(
     for (bindings, action) in [
         (&keybinds.help, KeybindAction::Help),
         (&keybinds.settings, KeybindAction::Settings),
-        (&keybinds.workspace_picker, KeybindAction::WorkspacePicker),
         (&keybinds.new_workspace, KeybindAction::NewWorkspace),
         (&keybinds.new_worktree, KeybindAction::NewWorktree),
         (&keybinds.open_worktree, KeybindAction::OpenWorktree),

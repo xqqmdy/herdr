@@ -685,16 +685,6 @@ fn update_ready_menu_opens_client_owned_release_notes_and_dismisses_by_version()
         .map(|cell| cell.symbol.as_str())
         .collect::<String>();
     assert!(navigate_text.contains("update ready"));
-    state.mode = ClientShellMode::Prefix;
-    let prefix = state
-        .compose(106, 30)
-        .expect("prefix without update status");
-    let prefix_text = prefix
-        .cells
-        .iter()
-        .map(|cell| cell.symbol.as_str())
-        .collect::<String>();
-    assert!(!prefix_text.contains("update ready"));
     state.mode = ClientShellMode::Navigate;
 
     state.toggle_global_menu();
@@ -846,7 +836,7 @@ fn update_ready_menu_opens_client_owned_release_notes_and_dismisses_by_version()
     ));
     let dismissed = state.handle_input_bytes(b"\r");
     assert!(state.overlay.is_none());
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     assert!(matches!(
         &dismissed.actions[..],
         [ClientShellAction::Endpoint { request, .. }]

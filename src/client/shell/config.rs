@@ -143,6 +143,7 @@ impl ClientShellConfig {
                     keybinds: config.keybinds(),
                 }),
             local_keys: config.keys.clone(),
+            vim: config.vim_keys().unwrap_or_default(),
             keybinding_source: ClientShellKeybindingSource::Local,
             prompt_new_tab_name: config.ui.prompt_new_tab_name,
             prompt_new_workspace_name: config.ui.prompt_new_workspace_name,
@@ -308,6 +309,12 @@ impl ClientShellConfig {
                         .map(|diagnostic| format!("{diagnostic}; kept current keybinds")),
                 ),
             }
+        }
+
+        if !invalid_section("keys") {
+            let (vim, vim_diagnostics) = crate::config::VimKeyConfig::from_keys(&config.keys);
+            self.vim = vim;
+            diagnostics.extend(vim_diagnostics);
         }
 
         if !invalid_section("ui") {

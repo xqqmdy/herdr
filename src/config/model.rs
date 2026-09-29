@@ -354,23 +354,16 @@ pub struct KeysConfig {
     /// Close the selected workspace. Default: "prefix+shift+d"
     pub close_workspace: BindingConfig,
     /// Open the workspace navigation surface. Default: "prefix+w"
-    pub workspace_picker: BindingConfig,
     /// Open the session navigator. Default: "prefix+g"
     pub goto: BindingConfig,
     /// Browse and resume maki sessions. Default: "prefix+m"
     pub maki_sessions: BindingConfig,
     /// Move workspace selection up in navigate mode. Default: "up".
-    pub navigate_workspace_up: BindingConfig,
     /// Move workspace selection down in navigate mode. Default: "down".
-    pub navigate_workspace_down: BindingConfig,
     /// Focus the pane to the left in navigate mode. Default: "h". Left arrow is always an alias.
-    pub navigate_pane_left: BindingConfig,
     /// Focus the pane below in navigate mode. Default: "j".
-    pub navigate_pane_down: BindingConfig,
     /// Focus the pane above in navigate mode. Default: "k".
-    pub navigate_pane_up: BindingConfig,
     /// Focus the pane to the right in navigate mode. Default: "l". Right arrow is always an alias.
-    pub navigate_pane_right: BindingConfig,
     /// Detach the current client from its Herdr server. Default: "prefix+q".
     pub detach: BindingConfig,
     /// Reload config.toml in the running app/server. Default: "prefix+shift+r".
@@ -457,6 +450,14 @@ pub struct KeysConfig {
     pub resize_pane_right: BindingConfig,
     /// Toggle sidebar collapse. Default: "prefix+b"
     pub toggle_sidebar: BindingConfig,
+    /// Key that leaves NORMAL mode and starts sending input to the focused
+    /// pane. Default: "i".
+    pub vim_insert: String,
+    /// Key sequence that returns from terminal input to NORMAL mode. A single
+    /// key like "esc" or a typed chord like "jj". Default: "jj".
+    pub vim_normal: String,
+    /// NORMAL-mode action keys layered over the prefix binding table.
+    pub normal: VimNormalKeysConfig,
     /// Optional indexed shortcuts expanded over number keys 1-9.
     pub indexed: IndexedKeysConfig,
     /// Prefix-mode custom command bindings.
@@ -464,6 +465,74 @@ pub struct KeysConfig {
     pub command: Vec<CommandKeybindConfig>,
     #[serde(skip_serializing)]
     pub(crate) user_fields: BTreeSet<&'static str>,
+}
+
+/// NORMAL-mode key overrides. Omitted
+/// fields keep their defaults; set a field to an empty string to disable it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct VimNormalKeysConfig {
+    /// Focus the pane to the left. Default: "ctrl+h".
+    pub focus_left: String,
+    /// Focus the pane below. Default: "ctrl+j".
+    pub focus_down: String,
+    /// Focus the pane above. Default: "ctrl+k".
+    pub focus_up: String,
+    /// Focus the pane to the right. Default: "ctrl+l".
+    pub focus_right: String,
+    /// Select the previous tab. Default: "h".
+    pub previous_tab: String,
+    /// Select the next tab. Default: "l".
+    pub next_tab: String,
+    /// Select the previous workspace. Default: "k".
+    pub previous_workspace: String,
+    /// Select the next workspace. Default: "j".
+    pub next_workspace: String,
+    /// Create a new tab. Default: "t".
+    pub new_tab: String,
+    /// Close the focused pane. Default: "x".
+    pub close_pane: String,
+    /// Split the focused pane horizontally (stacked). Default: "-".
+    pub split_down: String,
+    /// Split the focused pane vertically (side by side). Default: "V".
+    pub split_right: String,
+    /// Enter visual mode for the focused pane. Default: "v".
+    pub visual_mode: String,
+    /// Toggle zoom for the focused pane. Default: "z".
+    pub zoom: String,
+    /// Open keybinding help. Default: "?".
+    pub help: String,
+    /// Browse and resume maki sessions. Default: "m".
+    pub maki_sessions: String,
+    /// Detach the client. Default: "q".
+    pub detach: String,
+    /// Rename the active tab. Default: ",".
+    pub rename_tab: String,
+}
+
+impl Default for VimNormalKeysConfig {
+    fn default() -> Self {
+        Self {
+            focus_left: "ctrl+h".into(),
+            focus_down: "ctrl+j".into(),
+            focus_up: "ctrl+k".into(),
+            focus_right: "ctrl+l".into(),
+            previous_tab: "h".into(),
+            next_tab: "l".into(),
+            previous_workspace: "k".into(),
+            next_workspace: "j".into(),
+            new_tab: "t".into(),
+            close_pane: "x".into(),
+            split_down: "-".into(),
+            split_right: "V".into(),
+            visual_mode: "v".into(),
+            zoom: "z".into(),
+            help: "?".into(),
+            maki_sessions: "m".into(),
+            detach: "q".into(),
+            rename_tab: ",".into(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -493,23 +562,9 @@ pub(crate) struct KeysConfigOverlay {
     #[serde(skip_serializing_if = "Option::is_none")]
     close_workspace: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    workspace_picker: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     goto: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     maki_sessions: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    navigate_workspace_up: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    navigate_workspace_down: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    navigate_pane_left: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    navigate_pane_down: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    navigate_pane_up: Option<BindingConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    navigate_pane_right: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     detach: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -596,6 +651,12 @@ pub(crate) struct KeysConfigOverlay {
     #[serde(skip_serializing_if = "Option::is_none")]
     toggle_sidebar: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    vim_insert: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vim_normal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    normal: Option<VimNormalKeysConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     indexed: Option<IndexedKeysConfig>,
     #[serde(skip_serializing)]
     command: Option<Vec<CommandKeybindConfig>>,
@@ -656,15 +717,8 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(remove_worktree);
         apply_field!(rename_workspace);
         apply_field!(close_workspace);
-        apply_field!(workspace_picker);
         apply_field!(goto);
         apply_field!(maki_sessions);
-        apply_field!(navigate_workspace_up);
-        apply_field!(navigate_workspace_down);
-        apply_field!(navigate_pane_left);
-        apply_field!(navigate_pane_down);
-        apply_field!(navigate_pane_up);
-        apply_field!(navigate_pane_right);
         apply_field!(detach);
         apply_field!(reload_config);
         apply_field!(open_notification_target);
@@ -708,6 +762,9 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(resize_pane_up);
         apply_field!(resize_pane_right);
         apply_field!(toggle_sidebar);
+        apply_field!(vim_insert);
+        apply_field!(vim_normal);
+        apply_field!(normal);
         apply_field!(indexed);
         apply_field!(command);
 
@@ -762,15 +819,8 @@ impl KeysConfig {
         copy_effective_action_field!(remove_worktree, keybinds.remove_worktree);
         copy_effective_action_field!(rename_workspace, keybinds.rename_workspace);
         copy_effective_action_field!(close_workspace, keybinds.close_workspace);
-        copy_effective_action_field!(workspace_picker, keybinds.workspace_picker);
         copy_effective_action_field!(goto, keybinds.goto);
         copy_effective_action_field!(maki_sessions, keybinds.maki_sessions);
-        copy_effective_action_field!(navigate_workspace_up, keybinds.navigate.workspace_up);
-        copy_effective_action_field!(navigate_workspace_down, keybinds.navigate.workspace_down);
-        copy_effective_action_field!(navigate_pane_left, keybinds.navigate.pane_left);
-        copy_effective_action_field!(navigate_pane_down, keybinds.navigate.pane_down);
-        copy_effective_action_field!(navigate_pane_up, keybinds.navigate.pane_up);
-        copy_effective_action_field!(navigate_pane_right, keybinds.navigate.pane_right);
         copy_effective_action_field!(detach, keybinds.detach);
         copy_effective_action_field!(reload_config, keybinds.reload_config);
         copy_effective_action_field!(open_notification_target, keybinds.open_notification_target);
@@ -1132,15 +1182,8 @@ impl Default for KeysConfig {
             remove_worktree: BindingConfig::empty(),
             rename_workspace: BindingConfig::one("prefix+shift+w"),
             close_workspace: BindingConfig::one("prefix+shift+d"),
-            workspace_picker: BindingConfig::one("prefix+w"),
             goto: BindingConfig::one("prefix+g"),
             maki_sessions: BindingConfig::one("prefix+m"),
-            navigate_workspace_up: BindingConfig::one("up"),
-            navigate_workspace_down: BindingConfig::one("down"),
-            navigate_pane_left: BindingConfig::one("h"),
-            navigate_pane_down: BindingConfig::one("j"),
-            navigate_pane_up: BindingConfig::one("k"),
-            navigate_pane_right: BindingConfig::one("l"),
             detach: BindingConfig::one("prefix+q"),
             reload_config: BindingConfig::one("prefix+shift+r"),
             open_notification_target: BindingConfig::one("prefix+o"),
@@ -1184,6 +1227,9 @@ impl Default for KeysConfig {
             resize_pane_up: BindingConfig::empty(),
             resize_pane_right: BindingConfig::empty(),
             toggle_sidebar: BindingConfig::one("prefix+b"),
+            vim_insert: "i".into(),
+            vim_normal: "jj".into(),
+            normal: VimNormalKeysConfig::default(),
             indexed: IndexedKeysConfig::default(),
             command: Vec::new(),
             user_fields: BTreeSet::new(),

@@ -15,10 +15,7 @@ impl ClientShellState {
         }
         matches!(
             self.mode,
-            ClientShellMode::Prefix
-                | ClientShellMode::Navigate
-                | ClientShellMode::Resize
-                | ClientShellMode::Copy
+            ClientShellMode::Navigate | ClientShellMode::Resize | ClientShellMode::Copy
         )
     }
 

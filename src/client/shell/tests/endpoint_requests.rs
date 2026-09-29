@@ -220,6 +220,7 @@ fn cancelling_popup_request_unblocks_input_and_ignores_late_success() {
         .1
         .is_empty());
     assert!(!state.popup_pending);
+    state.mode = ClientShellMode::Terminal;
     assert!(!state.handle_input_bytes(b"x").requests.is_empty());
 }
 
@@ -241,6 +242,7 @@ fn disconnect_cancels_worktree_dialog_before_same_server_reconnect() {
         KeyModifiers::NONE,
     ))]);
     assert!(state.overlay.is_none());
+    state.mode = ClientShellMode::Terminal;
     assert!(!state.handle_input_bytes(b"x").requests.is_empty());
 }
 
@@ -374,6 +376,8 @@ fn stale_queued_request_is_cancelled_without_blocking_the_current_generation() {
 fn cancelled_integration_install_does_not_queue_a_refresh() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+    state.mode = ClientShellMode::Terminal;
     state.open_settings_overlay();
     let Some(ClientShellOverlay::Settings(settings)) = state.overlay.as_mut() else {
         panic!("settings overlay");

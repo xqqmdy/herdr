@@ -114,6 +114,7 @@ fn maki_sessions_overlay_renders_rows_and_empty_state() {
             &state.endpoints,
             &state.active_endpoint_id,
             &state.config.keybinds,
+            &state.config.vim,
             &state.config.palette,
         )
         .expect("maki sessions overlay renders");

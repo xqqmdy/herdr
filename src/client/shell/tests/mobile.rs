@@ -443,7 +443,7 @@ fn mobile_switcher_create_and_menu_rows_reuse_client_actions() {
         KeyModifiers::empty(),
     ))]);
     assert!(state.overlay.is_none());
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
 
     state.mode = ClientShellMode::Navigate;
     state.compose(44, 20).expect("mobile workspace switcher");
@@ -468,7 +468,7 @@ fn mobile_switcher_create_and_menu_rows_reuse_client_actions() {
         KeyModifiers::empty(),
     ))]);
     assert!(state.overlay.is_none());
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
 
     state.mode = ClientShellMode::Navigate;
     state.compose(44, 20).expect("mobile menu switcher");
@@ -488,7 +488,7 @@ fn mobile_switcher_create_and_menu_rows_reuse_client_actions() {
         KeyModifiers::empty(),
     ))]);
     assert!(state.overlay.is_none());
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
 }
 
 #[test]
@@ -633,24 +633,6 @@ fn mobile_switcher_scroll_close_and_width_transition_clear_mobile_hits() {
     assert_eq!(state.mobile_switcher_scroll, 2);
     state.compose(44, 10).expect("wheel position stays stable");
     assert_eq!(state.mobile_switcher_scroll, 2);
-    for _ in 0..7 {
-        state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-            KeyCode::Down,
-            KeyModifiers::empty(),
-        ))]);
-    }
-    state.compose(44, 10).expect("revealed mobile selection");
-    assert_eq!(
-        state.navigate_workspace_id,
-        state.navigation_target(&ClientEndpointId::Local, "ws_8")
-    );
-    assert!(state.mobile_switcher_scroll > 2);
-    assert!(state.hits.mobile_targets.iter().any(|(_, target)| {
-        matches!(
-            target,
-            ClientMobileTarget::Workspace { workspace_id, .. } if workspace_id == "ws_8"
-        )
-    }));
     let close = state.hits.mobile_close;
     state.handle_raw_events(vec![RawInputEvent::Mouse(crossterm::event::MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),

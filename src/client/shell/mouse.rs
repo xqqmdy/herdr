@@ -918,7 +918,7 @@ impl ClientShellState {
         }
         if !self.replaying_url_click
             && self.overlay.is_none()
-            && self.mode == ClientShellMode::Terminal
+            && self.pane_passthrough_active()
             && mouse.kind == MouseEventKind::Down(MouseButton::Left)
             && mouse
                 .modifiers
@@ -976,7 +976,7 @@ impl ClientShellState {
             return;
         }
         if self.overlay.is_none()
-            && self.mode == ClientShellMode::Terminal
+            && self.pane_passthrough_active()
             && self
                 .visible_notification
                 .as_ref()
@@ -2143,7 +2143,7 @@ impl ClientShellState {
                     })
                     .cloned();
                 if let Some(hit) = scrollbar_hit {
-                    self.mode = ClientShellMode::Terminal;
+                    self.mode = self.default_terminal_mode();
                     self.push_endpoint_method(
                         crate::api::schema::Method::PaneFocus(crate::api::schema::PaneTarget {
                             pane_id: hit.pane_id.clone(),

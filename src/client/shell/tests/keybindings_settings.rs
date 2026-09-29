@@ -203,39 +203,25 @@ fn configured_prefix_is_client_owned_and_renders_its_bar() {
         r#"
 [keys]
 prefix = "ctrl+a"
-detach = "prefix+x"
+detach = "prefix+d"
 "#,
     )
     .expect("configured keybinds");
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
     state.set_snapshot(Box::new(snapshot()));
     state.set_pane_surface(surface());
+    state.mode = ClientShellMode::Terminal;
 
     let old_default = state.handle_input_bytes(&[0x02]);
     assert_eq!(
         old_default.requests.len(),
         1,
-        "ctrl-b should reach the pane"
+        "ctrl-b should reach the pane in INSERT mode"
     );
 
-    let prefix = state.handle_input_bytes(&[0x01]);
-    assert!(prefix.requests.is_empty());
-    assert!(prefix.repaint);
-    let frame = state.compose(106, 20).expect("prefix frame");
-    let text = frame
-        .cells
-        .chunks(frame.width as usize)
-        .map(|row| {
-            row.iter()
-                .map(|cell| cell.symbol.as_str())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(text.contains("PREFIX"), "frame: {text:?}");
-    assert!(text.contains("ctrl+a"), "frame: {text:?}");
-
-    let detach = state.handle_input_bytes(b"x");
+    let _ = state.handle_input_bytes(b"jj");
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+    let detach = state.handle_input_bytes(b"d");
     assert!(detach.detach);
     assert!(detach.requests.is_empty());
 }
@@ -247,7 +233,6 @@ fn prefix_endpoint_action_uses_public_api_with_stable_ids() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
     state.set_snapshot(Box::new(snapshot()));
 
-    assert!(state.handle_input_bytes(&[0x02]).actions.is_empty());
     let create = state.handle_input_bytes(b"c");
     let [ClientShellAction::Endpoint {
         boot_id, request, ..
@@ -344,9 +329,9 @@ command = "local-only"
             action: crate::protocol::ClientShellCommandAction::Shell,
             description: Some("loaded endpoint command".into()),
         });
-    local_state.mode = ClientShellMode::Prefix;
+    local_state.mode = ClientShellMode::VimNormal;
     local_state.set_snapshot(Box::new(id_only_projection));
-    assert_eq!(local_state.mode, ClientShellMode::Prefix);
+    assert_eq!(local_state.mode, ClientShellMode::VimNormal);
     assert_eq!(
         local_state.config.keybinds.keybinds.custom_commands[0].command,
         "cmd_reloaded_endpoint"
@@ -795,7 +780,6 @@ fn resize_mode_reuses_endpoint_resize_and_stays_active_until_done() {
     state.set_snapshot(Box::new(snapshot()));
     state.set_pane_surface(surface());
 
-    assert!(state.handle_input_bytes(&[0x02]).actions.is_empty());
     assert!(state.handle_input_bytes(b"r").actions.is_empty());
     assert_eq!(state.mode, ClientShellMode::Resize);
 
@@ -824,5 +808,5 @@ fn resize_mode_reuses_endpoint_resize_and_stays_active_until_done() {
     assert_eq!(state.mode, ClientShellMode::Resize);
 
     assert!(state.handle_input_bytes(b"\r").actions.is_empty());
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
 }

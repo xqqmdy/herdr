@@ -36,9 +36,13 @@ pub(super) fn render_mode_bar(
     endpoint_error: Option<&str>,
     update_available: bool,
     keybinds: &LiveKeybindConfig,
+    vim: &crate::config::VimKeyConfig,
     palette: &Palette,
 ) -> Option<Rect> {
-    if (mode == ClientShellMode::Terminal && endpoint_error.is_none()) || pane_area.is_empty() {
+    let passthrough_chip = mode == ClientShellMode::Terminal;
+    if (mode == ClientShellMode::Terminal && !passthrough_chip && endpoint_error.is_none())
+        || pane_area.is_empty()
+    {
         return None;
     }
 
@@ -68,7 +72,6 @@ pub(super) fn render_mode_bar(
             palette.accent
         })
         .add_modifier(Modifier::BOLD);
-    let prefix = keybinds.primary_prefix_label();
     let prefix_rhs = |bindings: &crate::config::ActionKeybinds| {
         bindings
             .prefix_rhs_label()
@@ -81,20 +84,24 @@ pub(super) fn render_mode_bar(
             (" ERROR ".to_owned(), mode_style),
             (format!(" {error}"), base),
         ]);
+    } else if mode == ClientShellMode::Terminal {
+        segments.extend([
+            (" INSERT ".to_owned(), mode_style),
+            (" ".to_owned(), base),
+            (crate::config::format_key_sequence(&vim.normal), key),
+            (" normal".to_owned(), base),
+        ]);
     } else {
         match mode {
-            ClientShellMode::Prefix => {
+            ClientShellMode::VimNormal => {
                 segments.extend([
-                    (" PREFIX ".to_owned(), mode_style),
+                    (" NORMAL ".to_owned(), mode_style),
                     (" ".to_owned(), base),
-                    ("esc".to_owned(), key),
-                    (" cancel  ".to_owned(), base),
-                    (prefix, key),
-                    (" send prefix  ".to_owned(), base),
-                    (prefix_rhs(&keybinds.keybinds.workspace_picker), key),
-                    (" workspace nav  ".to_owned(), base),
-                    (prefix_rhs(&keybinds.keybinds.help), key),
-                    (" keybinds".to_owned(), base),
+                    (crate::config::format_key_combo(vim.insert), key),
+                    (" insert".to_owned(), base),
+                    ("  ".to_owned(), base),
+                    (crate::config::format_key_sequence(&vim.normal), key),
+                    (" normal".to_owned(), base),
                 ]);
             }
             ClientShellMode::Navigate => {
@@ -128,7 +135,13 @@ pub(super) fn render_mode_bar(
                         crate::api::schema::PaneCopySearchDirection::Forward => "/",
                         crate::api::schema::PaneCopySearchDirection::Backward => "?",
                     };
-                    buffer.set_stringn(bar.x, bar.y, " COPY ", usize::from(bar.width), mode_style);
+                    buffer.set_stringn(
+                        bar.x,
+                        bar.y,
+                        " VISUAL ",
+                        usize::from(bar.width),
+                        mode_style,
+                    );
                     let prefix = 8.min(bar.width);
                     if bar.width >= 8 {
                         buffer.set_string(bar.x + 7, bar.y, marker, key);
@@ -176,7 +189,7 @@ pub(super) fn render_mode_bar(
                             ("esc", " clear  q exit")
                         };
                     segments.extend([
-                        (" COPY ".to_owned(), mode_style),
+                        (" VISUAL ".to_owned(), mode_style),
                         (" ".to_owned(), base),
                         ("h/j/k/l w/b/e { }".to_owned(), key),
                         (" move  ".to_owned(), base),

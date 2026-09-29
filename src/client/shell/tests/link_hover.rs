@@ -5,6 +5,7 @@ fn hover_state() -> ClientShellState {
     state.set_snapshot(Box::new(snapshot()));
     state.set_endpoint_methods(Some(vec!["pane.link.resolve".into()]));
     state.set_pane_surface(surface());
+    state.mode = ClientShellMode::Terminal;
     state.compose(106, 20).unwrap();
     state
 }

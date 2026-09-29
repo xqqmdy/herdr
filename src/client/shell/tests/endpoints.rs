@@ -1,7 +1,5 @@
 use super::*;
 
-#[path = "workspace_navigation.rs"]
-mod workspace_navigation;
 use crate::client::endpoint::{
     ClientEndpointId, ClientEndpointStatus, ProfileId, SavedSshEndpoint,
 };
@@ -421,6 +419,11 @@ fn switching_machines_from_copy_mode_restores_terminal_input() {
     state.compose(100, 28).unwrap();
 
     assert!(state.copy_mode.is_none());
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('i'),
+        KeyModifiers::NONE,
+    ))]);
     assert_eq!(state.mode, ClientShellMode::Terminal);
     let input = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
         KeyCode::Char('x'),
@@ -463,7 +466,7 @@ fn live_catalog_active_removal_does_not_retain_remote_projection_or_input() {
     let (mut state, remote) = state_with_remote();
     assert!(state.activate_endpoint_projection(&remote));
     state.set_pane_surface(surface());
-    state.mode = ClientShellMode::Prefix;
+    state.mode = ClientShellMode::VimNormal;
     state.overlay = Some(ClientShellOverlay::Onboarding);
     state.select_unavailable_local();
     state.retire_endpoint(&remote);
@@ -2440,7 +2443,8 @@ fn cached_offline_navigator_and_mobile_targets_are_dimmed_and_disabled() {
 }
 
 #[test]
-fn focus_agent_index_uses_online_aggregate_rows() {
+fn focus_agent_index_resolves_online_aggregate_rows() {
+    use super::aggregate_navigation::online_agent_targets;
     use crate::api::schema::AgentStatus;
 
     let (mut state, endpoint_id) = state_with_remote();
@@ -2453,14 +2457,22 @@ fn focus_agent_index_uses_online_aggregate_rows() {
         .as_mut()
         .expect("remote snapshot")
         .agents = vec![agent("remote agent", AgentStatus::Working, 2)];
-    let focus_agent =
-        |index| crate::input::KeybindMatch::Action(crate::input::KeybindAction::FocusAgent(index));
 
-    assert!(state.indexed_navigation_target_exists(&focus_agent(0)));
-    assert!(!state.indexed_navigation_target_exists(&focus_agent(1)));
+    let targets = online_agent_targets(
+        &state.endpoints,
+        &state.active_endpoint_id,
+        state.config.agent_panel_sort,
+    );
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].endpoint_id, endpoint_id);
 
     state.set_endpoint_status(&endpoint_id, ClientEndpointStatus::Reconnecting);
-    assert!(!state.indexed_navigation_target_exists(&focus_agent(0)));
+    let targets = online_agent_targets(
+        &state.endpoints,
+        &state.active_endpoint_id,
+        state.config.agent_panel_sort,
+    );
+    assert!(targets.is_empty());
 }
 
 #[test]

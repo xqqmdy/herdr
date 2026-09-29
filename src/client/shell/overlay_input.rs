@@ -85,7 +85,7 @@ impl ClientShellState {
             .and_then(|snapshot| snapshot.focused_workspace_id.as_deref())
             .is_some()
         {
-            ClientShellMode::Terminal
+            self.default_terminal_mode()
         } else {
             ClientShellMode::Navigate
         };

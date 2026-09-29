@@ -286,6 +286,7 @@ fn invalid_experimental_reload_keeps_input_source_preference() {
 fn physical_release_uses_the_leased_press_code_with_current_modifiers() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
     state.set_pane_surface(surface());
     let press = crate::input::TerminalKey::new(KeyCode::Char('x'), KeyModifiers::empty())
         .with_windows_record(crate::input::WindowsKeyRecord {
@@ -392,7 +393,7 @@ fn highlighted_search_match_copies_after_in_flight_repeat() {
         &repeat_id,
         Ok(copy_search_result(matches, Some(1))),
     );
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     let selection_request_id = actions
         .iter()
         .find_map(|action| match action {
@@ -473,6 +474,7 @@ fn shell_targets_unconsumed_input_and_keeps_prefix_local() {
     let config = ClientShellConfig::from_config(&Config::default());
     let mut state = ClientShellState::new(config);
     state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
 
     let text = state.handle_input_bytes(b"hello");
     assert_eq!(text.requests.len(), 1);
@@ -517,7 +519,8 @@ fn shell_targets_unconsumed_input_and_keeps_prefix_local() {
             ..
         }] if *modifiers == KeyModifiers::ALT.bits()
     ));
-    assert!(!state.handle_input_bytes(&[0x02]).detach);
+    let _ = state.handle_input_bytes(b"jj");
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     let detach = state.handle_input_bytes(b"q");
     assert!(detach.detach);
     assert!(detach.requests.is_empty());
@@ -527,6 +530,7 @@ fn shell_targets_unconsumed_input_and_keeps_prefix_local() {
 fn pane_key_release_keeps_the_press_target() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
 
     let press = state.handle_input_bytes(b"\x1b[99;5u");
     let release = state.handle_input_bytes(b"\x1b[99;5:3u");
@@ -576,10 +580,10 @@ fn help_overlay_uses_live_keymap_and_owns_filter_state() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(text.contains("keybinds"));
-    assert!(text.contains("prefix mode"));
+    assert!(text.contains("terminal input"));
 
     assert!(state.handle_input_bytes(b"/").actions.is_empty());
-    assert!(state.handle_input_bytes(b"workspace").actions.is_empty());
+    assert!(state.handle_input_bytes(b"maki").actions.is_empty());
     let filtered = state.compose(106, 30).expect("filtered help");
     let text = filtered
         .cells
@@ -591,8 +595,8 @@ fn help_overlay_uses_live_keymap_and_owns_filter_state() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(text.contains("workspace navigation"));
-    assert!(!text.contains("prefix mode"));
+    assert!(text.contains("maki sessions"));
+    assert!(!text.contains("terminal input"));
     assert!(filtered
         .cursor
         .as_ref()
@@ -652,26 +656,142 @@ fn styled_client_composition_preserves_pane_hyperlinks() {
 }
 
 #[test]
-fn every_configured_prefix_enters_prefix_mode() {
-    let mut config = Config::default();
-    config.keys.prefix =
-        crate::config::BindingConfig::Many(vec!["ctrl+space".to_owned(), "ctrl+s".to_owned()]);
+fn vim_terminal_chord_mismatch_types_held_keys_into_the_pane() {
+    let config = Config::default();
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
     state.set_snapshot(Box::new(snapshot()));
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('i'),
+        KeyModifiers::empty(),
+    ))]);
+    assert_eq!(state.mode, ClientShellMode::Terminal);
 
-    for combo in [
-        (KeyCode::Char(' '), KeyModifiers::CONTROL),
-        (KeyCode::Char('s'), KeyModifiers::CONTROL),
-    ] {
-        let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-            combo.0, combo.1,
-        ))]);
-        assert_eq!(state.mode, ClientShellMode::Prefix);
-
-        let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-            KeyCode::Esc,
+    let outcome = state.handle_raw_events(vec![
+        RawInputEvent::Key(crate::input::TerminalKey::new(
+            KeyCode::Char('j'),
             KeyModifiers::empty(),
-        ))]);
-        assert_eq!(state.mode, ClientShellMode::Terminal);
-    }
+        )),
+        RawInputEvent::Key(crate::input::TerminalKey::new(
+            KeyCode::Char('k'),
+            KeyModifiers::empty(),
+        )),
+    ]);
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert!(outcome.actions.iter().any(|action| matches!(
+        action,
+        ClientShellAction::Endpoint { request, .. }
+            if matches!(request.method, crate::api::schema::Method::PaneSendText(_))
+    )));
+    assert!(outcome
+        .requests
+        .iter()
+        .any(|message| matches!(message, ClientMessage::ClientShellPaneInput { .. })));
+}
+
+#[test]
+fn vim_normal_mode_swallows_unmatched_keys_and_stays_for_actions() {
+    let config = Config::default();
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+
+    let unmatched = state.handle_raw_events(vec![RawInputEvent::Key(
+        crate::input::TerminalKey::new(KeyCode::Char('y'), KeyModifiers::empty()),
+    )]);
+    assert!(unmatched.requests.is_empty());
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+
+    let prefix_key = state.handle_raw_events(vec![RawInputEvent::Key(
+        crate::input::TerminalKey::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
+    )]);
+    assert!(prefix_key.requests.is_empty());
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+
+    let detach = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('q'),
+        KeyModifiers::empty(),
+    ))]);
+    assert!(detach.detach);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+
+    let insert = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('i'),
+        KeyModifiers::empty(),
+    ))]);
+    assert!(insert.requests.is_empty());
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+}
+
+#[test]
+fn vim_terminal_mode_returns_to_normal_on_the_normal_key() {
+    let config = Config::default();
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('i'),
+        KeyModifiers::empty(),
+    ))]);
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+
+    let back = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('j'),
+        KeyModifiers::empty(),
+    ))]);
+    assert!(back.requests.is_empty());
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+
+    let back = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('j'),
+        KeyModifiers::empty(),
+    ))]);
+    assert!(back.requests.is_empty());
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+
+    let close_pane = state.handle_raw_events(vec![RawInputEvent::Key(
+        crate::input::TerminalKey::new(KeyCode::Char('x'), KeyModifiers::empty()),
+    )]);
+    assert!(close_pane.actions.iter().any(|action| matches!(
+        action,
+        ClientShellAction::Endpoint { request, .. }
+            if matches!(request.method, crate::api::schema::Method::PaneClose(_))
+    )));
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+}
+
+#[test]
+fn vim_mode_keeps_prefix_table_actions_in_normal_and_forwards_the_prefix_key() {
+    let config = Config::default();
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('i'),
+        KeyModifiers::empty(),
+    ))]);
+
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('b'),
+        KeyModifiers::CONTROL,
+    ))]);
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('j'),
+        KeyModifiers::empty(),
+    ))]);
+    let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('j'),
+        KeyModifiers::empty(),
+    ))]);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+
+    let edit = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+        KeyCode::Char('e'),
+        KeyModifiers::empty(),
+    ))]);
+    assert!(edit.actions.iter().any(|action| matches!(
+        action,
+        ClientShellAction::Endpoint { request, .. }
+            if matches!(request.method, crate::api::schema::Method::PaneEditScrollback(_))
+    )));
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
 }

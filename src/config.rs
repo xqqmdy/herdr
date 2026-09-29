@@ -17,9 +17,10 @@ pub use self::{
         upsert_section_value,
     },
     keybinds::{
-        format_prefix_combos, normalize_key_combo, terminal_key_matches_combo, ActionKeybinds,
-        BindingConfig, CommandKeybindConfig, CustomCommandAction, CustomCommandKeybind,
-        IndexedKeybind, KeyCombo, Keybinds, LiveKeybindConfig,
+        format_key_combo, format_key_sequence, format_prefix_combos, normalize_key_combo,
+        terminal_key_matches_combo, ActionKeybinds, BindingConfig, CommandKeybindConfig,
+        CustomCommandAction, CustomCommandKeybind, IndexedKeybind, KeyCombo, Keybinds,
+        LiveKeybindConfig, VimKeyConfig, VimNormalKeys,
     },
     model::{
         validated_sidebar_bounds, AgentPanelSortConfig, Config, ConfigReloadReport,
@@ -117,6 +118,7 @@ impl Config {
             .into_iter()
             .chain(keybind_diags)
             .chain(self.remote_image_paste_key().err())
+            .chain(self.vim_keys().err().into_iter().flatten())
             .chain(self.theme.diagnostics())
             .chain(self.ui.sound.diagnostics())
             .chain(tab_bar_right_diagnostics(&self.ui.tab_bar_right))
@@ -162,6 +164,15 @@ impl Config {
         parse_key_combo(raw).map(Some).ok_or_else(|| {
             format!("invalid keybinding: keys.remote_image_paste = {raw:?}; disabling binding")
         })
+    }
+
+    pub(crate) fn vim_keys(&self) -> Result<crate::config::VimKeyConfig, Vec<String>> {
+        let (vim, diagnostics) = crate::config::VimKeyConfig::from_keys(&self.keys);
+        if diagnostics.is_empty() {
+            Ok(vim)
+        } else {
+            Err(diagnostics)
+        }
     }
 
     pub(crate) fn live_keybinds_with_diagnostics(
@@ -430,6 +441,67 @@ command = "echo one"
     fn remote_image_paste_key_can_be_disabled() {
         let config: Config = toml::from_str("[keys]\nremote_image_paste = ''\n").unwrap();
         assert_eq!(config.remote_image_paste_key().unwrap(), None);
+    }
+
+    #[test]
+    fn vim_keys_parse_defaults_and_overrides() {
+        let config = Config::default();
+        let vim = config.vim_keys().unwrap();
+        assert_eq!(vim.insert, (KeyCode::Char('i'), KeyModifiers::empty()));
+        assert_eq!(
+            vim.normal,
+            vec![
+                (KeyCode::Char('j'), KeyModifiers::empty()),
+                (KeyCode::Char('j'), KeyModifiers::empty())
+            ]
+        );
+        assert_eq!(
+            vim.normal_keys.previous_workspace,
+            Some((KeyCode::Char('k'), KeyModifiers::empty()))
+        );
+        assert_eq!(
+            vim.normal_keys.next_workspace,
+            Some((KeyCode::Char('j'), KeyModifiers::empty()))
+        );
+        assert_eq!(
+            vim.normal_keys.focus_left,
+            Some((KeyCode::Char('h'), KeyModifiers::CONTROL))
+        );
+        assert_eq!(
+            vim.normal_keys.split_right,
+            Some((KeyCode::Char('v'), KeyModifiers::SHIFT))
+        );
+
+        let config: Config = toml::from_str(
+            "[keys]\nvim_insert = 'a'\nvim_normal = 'ctrl+q'\n\n[keys.normal]\nsplit_down = '-'\nfocus_left = ''\n",
+        )
+        .unwrap();
+        let vim = config.vim_keys().unwrap();
+        assert_eq!(vim.insert, (KeyCode::Char('a'), KeyModifiers::empty()));
+        assert_eq!(
+            vim.normal,
+            vec![(KeyCode::Char('q'), KeyModifiers::CONTROL)]
+        );
+        assert_eq!(
+            vim.normal_keys.split_down,
+            Some((KeyCode::Char('-'), KeyModifiers::empty()))
+        );
+        assert_eq!(vim.normal_keys.focus_left, None);
+        assert_eq!(
+            vim.normal_keys.previous_tab,
+            Some((KeyCode::Char('h'), KeyModifiers::empty()))
+        );
+    }
+
+    #[test]
+    fn vim_keys_report_invalid_bindings_as_diagnostics() {
+        let config: Config = toml::from_str("[keys]\nvim_insert = 'not+a+key'\n").unwrap();
+        let err = config.vim_keys().unwrap_err();
+        assert!(err[0].contains("keys.vim_insert"));
+        assert!(config
+            .collect_diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.contains("keys.vim_insert")));
     }
 
     #[test]

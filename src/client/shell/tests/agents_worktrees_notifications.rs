@@ -810,10 +810,11 @@ fn workspace_actions_preserve_selected_target_and_client_confirmation() {
     state.mode = ClientShellMode::Navigate;
     state.navigate_workspace_id = state.navigation_target(&ClientEndpointId::Local, "ws_2");
 
-    let rename = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        KeyCode::Char('w'),
-        KeyModifiers::SHIFT,
-    ))]);
+    let mut rename = ClientShellInput::default();
+    state.record_binding(
+        crate::input::KeybindMatch::Action(crate::input::KeybindAction::RenameWorkspace),
+        &mut rename,
+    );
     assert!(rename.actions.is_empty());
     assert!(matches!(
         state.overlay.as_ref(),
@@ -930,68 +931,6 @@ fn named_workspace_overlay_targets_projected_source_workspace() {
                 && params.cwd.as_deref() == Some("/repo")
                 && params.label.is_none()
     ));
-}
-
-#[test]
-fn navigate_mode_selects_workspace_locally_then_focuses_by_stable_id() {
-    let mut snapshot = snapshot();
-    let mut second = snapshot.workspaces[0].clone();
-    second.workspace_id = "ws_2".into();
-    second.number = 2;
-    second.label = "second".into();
-    second.focused = false;
-    snapshot.workspaces.push(second);
-    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
-    state.set_snapshot(Box::new(snapshot));
-    state.set_pane_surface(surface());
-
-    assert!(state.handle_input_bytes(&[0x02]).actions.is_empty());
-    let enter_navigate = state.handle_input_bytes(b"w");
-    assert!(enter_navigate.repaint);
-    assert_eq!(state.mode, ClientShellMode::Navigate);
-    assert_eq!(
-        state.navigate_workspace_id,
-        state.navigation_target(&ClientEndpointId::Local, "ws_1")
-    );
-
-    let invalid = state.handle_input_bytes(b"9");
-    assert!(invalid.actions.is_empty());
-    assert_eq!(state.mode, ClientShellMode::Navigate);
-    assert_eq!(
-        state.navigate_workspace_id,
-        state.navigation_target(&ClientEndpointId::Local, "ws_1")
-    );
-
-    let move_selection = state.handle_input_bytes(b"\x1b[B");
-    assert!(move_selection.actions.is_empty());
-    assert_eq!(
-        state.navigate_workspace_id,
-        state.navigation_target(&ClientEndpointId::Local, "ws_2")
-    );
-    let frame = state.compose(106, 20).expect("navigate frame");
-    let text = frame
-        .cells
-        .chunks(frame.width as usize)
-        .map(|row| {
-            row.iter()
-                .map(|cell| cell.symbol.as_str())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(text.contains("second"));
-    assert!(text.contains("NAVIGATE"));
-
-    let focus = state.handle_input_bytes(b"\r");
-    let [ClientShellAction::Endpoint { request, .. }] = &focus.actions[..] else {
-        panic!("selected workspace should use endpoint API");
-    };
-    assert!(matches!(
-        &request.method,
-        crate::api::schema::Method::WorkspaceFocus(target)
-            if target.workspace_id == "ws_2"
-    ));
-    assert_eq!(state.mode, ClientShellMode::Terminal);
 }
 
 #[test]

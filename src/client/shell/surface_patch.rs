@@ -58,7 +58,7 @@ fn fast_path_blocker(
     state: &ClientShellState,
     patch: &crate::protocol::PaneSurfacePatch,
 ) -> Option<&'static str> {
-    if state.mode != ClientShellMode::Terminal {
+    if !state.pane_passthrough_active() {
         Some("client_surface_patch.fallback.mode")
     } else if state.overlay.is_some() {
         Some("client_surface_patch.fallback.overlay")

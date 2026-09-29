@@ -36,6 +36,7 @@ pub(crate) struct ClientShellConfig {
     pub(super) theme_runtime: crate::app::state::ThemeRuntimeConfig,
     pub(super) palette: Palette,
     pub(super) keybinds: LiveKeybindConfig,
+    pub(super) vim: crate::config::VimKeyConfig,
     pub(super) local_keys: crate::config::KeysConfig,
     pub(super) keybinding_source: ClientShellKeybindingSource,
     pub(super) prompt_new_tab_name: bool,
@@ -270,7 +271,8 @@ pub(crate) struct ClientShellInput {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ClientShellMode {
     Terminal,
-    Prefix,
+    VimNormal,
+    /// Mobile switcher surface only; unreachable from desktop keyboard input.
     Navigate,
     Resize,
     Copy,
@@ -900,6 +902,8 @@ pub(crate) struct ClientShellState {
     pub(super) active_endpoint_id: ClientEndpointId,
     pub(super) collapsed_endpoints: HashSet<ClientEndpointId>,
     pub(super) mode: ClientShellMode,
+    /// How far the typed vim-normal chord in terminal mode has matched.
+    pub(super) vim_normal_progress: usize,
     pub(super) navigate_workspace_id: Option<WorkspaceNavigationTarget>,
     pub(super) pending_workspace_highlight: Option<PendingWorkspaceHighlight>,
     pub(super) reveal_navigation_workspace: bool,
@@ -984,6 +988,21 @@ pub(super) struct WorkspaceEntry {
 }
 
 impl ClientShellState {
+    /// Mode a finished interaction returns to: NORMAL when the vim layer is
+    /// enabled, terminal passthrough otherwise.
+    pub(super) fn default_terminal_mode(&self) -> ClientShellMode {
+        ClientShellMode::VimNormal
+    }
+
+    /// Whether the current mode lets pane surfaces and pane mouse interaction
+    /// behave like terminal passthrough.
+    pub(super) fn pane_passthrough_active(&self) -> bool {
+        matches!(
+            self.mode,
+            ClientShellMode::Terminal | ClientShellMode::VimNormal
+        )
+    }
+
     pub(crate) fn new(mut config: ClientShellConfig) -> Self {
         let preferences = config.preferences.clone();
         let local_config_diagnostic = config.startup_config_diagnostic.take();
@@ -1066,6 +1085,7 @@ impl ClientShellState {
             collapsed_endpoints: HashSet::new(),
             mode: ClientShellMode::Terminal,
             navigate_workspace_id: None,
+            vim_normal_progress: 0,
             pending_workspace_highlight: None,
             reveal_navigation_workspace: false,
             overlay,
@@ -1275,7 +1295,7 @@ impl ClientShellState {
         self.word_selection_gesture = None;
         self.copy_mode = None;
         if self.mode == ClientShellMode::Copy {
-            self.mode = ClientShellMode::Terminal;
+            self.mode = self.default_terminal_mode();
         }
         self.reset_copy_pipeline();
         self.copy_feedback = None;
@@ -1297,6 +1317,7 @@ impl ClientShellState {
             ClientEndpointId::Local => snapshot.boot_id.clone(),
             endpoint_id => format!("{}:{}", endpoint_id.storage_key(), snapshot.boot_id),
         };
+        let first_snapshot = self.snapshot.is_none();
         let endpoint_boot_changed =
             self.snapshot.is_some() && self.graphics.scope() != graphics_scope;
         let generation_changed = self.active_snapshot_generation != generation;
@@ -1368,9 +1389,7 @@ impl ClientShellState {
         }
         if boot_changed {
             // A reboot must not turn Enter on a stale preview into focus on a reused ID.
-            let preview = (self.mode == ClientShellMode::Navigate)
-                .then(|| self.navigate_workspace_id.take())
-                .flatten();
+            let preview = self.navigate_workspace_id.take();
             self.reset_endpoint_projection();
             self.navigate_workspace_id = preview;
         } else if let Some(previous) = self
@@ -1390,10 +1409,10 @@ impl ClientShellState {
             } else if active_keymap_changed
                 && matches!(
                     self.mode,
-                    ClientShellMode::Prefix | ClientShellMode::Navigate | ClientShellMode::Resize
+                    ClientShellMode::Navigate | ClientShellMode::Resize
                 )
             {
-                self.mode = ClientShellMode::Terminal;
+                self.mode = self.default_terminal_mode();
             }
         }
         let tab_layout_changed = self.snapshot.as_deref().is_none_or(|current| {
@@ -1478,10 +1497,13 @@ impl ClientShellState {
                     self.selection_highlight_clear_deadline = None;
                 }
                 if self.mode == ClientShellMode::Copy {
-                    self.mode = ClientShellMode::Terminal;
+                    self.mode = self.default_terminal_mode();
                 }
             } else if pane_focused {
-                if self.mode == ClientShellMode::Terminal {
+                if matches!(
+                    self.mode,
+                    ClientShellMode::Terminal | ClientShellMode::VimNormal
+                ) {
                     self.mode = ClientShellMode::Copy;
                 }
                 if self.selection.is_none() {
@@ -1498,7 +1520,7 @@ impl ClientShellState {
                     self.selection_highlight_clear_deadline = None;
                 }
                 if self.mode == ClientShellMode::Copy {
-                    self.mode = ClientShellMode::Terminal;
+                    self.mode = self.default_terminal_mode();
                 }
             }
         }
@@ -1572,6 +1594,12 @@ impl ClientShellState {
                 }
                 Some(_) => {}
             }
+        }
+        if first_snapshot
+            && self.mode == ClientShellMode::Terminal
+            && snapshot.focused_pane_id.is_some()
+        {
+            self.mode = ClientShellMode::VimNormal;
         }
         self.snapshot = Some(snapshot);
         self.reconcile_pending_workspace_highlight();
@@ -1664,7 +1692,7 @@ impl ClientShellState {
                 self.input_leases
                     .remove_target(&ClientInputTarget::Popup(terminal_id.clone()));
             }
-            self.mode = ClientShellMode::Terminal;
+            self.mode = self.default_terminal_mode();
             self.navigate_workspace_id = None;
             if !matches!(
                 self.overlay.as_ref(),

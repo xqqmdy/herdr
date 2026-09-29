@@ -148,7 +148,6 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # detach = "prefix+q"
 # reload_config = "prefix+shift+r"
 # open_notification_target = "prefix+o"
-# workspace_picker = "prefix+w"
 # goto = "prefix+g"
 # maki_sessions = "prefix+m"
 # new_workspace = "prefix+shift+n"
@@ -201,6 +200,31 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # navigate_pane_down = "j"
 # navigate_pane_up = "k"
 # navigate_pane_right = "l"     # right arrow always focuses the pane to the right
+
+# Vim-style NORMAL/INSERT mode layer. The prefix is not needed:
+# every keypress resolves through the bindings above, unmatched keys are
+# swallowed, and pane input requires INSERT mode.
+# vim_insert = "i"   # leaves NORMAL mode and types into the focused pane
+# vim_normal = "jj"  # key sequence returning from terminal input to NORMAL mode
+# [keys.normal]      # NORMAL-mode keys, resolved before the prefix bindings
+# focus_left = "ctrl+h"
+# focus_down = "ctrl+j"
+# focus_up = "ctrl+k"
+# focus_right = "ctrl+l"
+# previous_tab = "h"
+# next_tab = "l"
+# previous_workspace = "k"
+# next_workspace = "j"
+# new_tab = "t"
+# close_pane = "x"
+# split_down = "-"    # split horizontally (stacked)
+# split_right = "V"   # split vertically (side by side)
+# visual_mode = "v"
+# zoom = "z"
+# help = "?"
+# maki_sessions = "m"
+# detach = "q"
+# rename_tab = ","
 
 # Custom commands use the same binding syntax.
 # type = "shell" runs detached in the background.

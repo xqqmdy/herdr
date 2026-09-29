@@ -530,12 +530,6 @@
           "description": "Close the selected workspace."
         },
         {
-          "key": "keys.workspace_picker",
-          "type": "keybinding",
-          "default": "\"prefix+w\"",
-          "description": "Open the workspace navigation surface."
-        },
-        {
           "key": "keys.goto",
           "type": "keybinding",
           "default": "\"prefix+g\"",
@@ -840,6 +834,126 @@
           "type": "keybinding",
           "default": "\"prefix+b\"",
           "description": "Toggle sidebar collapse."
+        },
+        {
+          "key": "keys.vim_insert",
+          "type": "keybinding",
+          "default": "\"i\"",
+          "description": "Key that leaves NORMAL mode and starts sending input to the focused pane."
+        },
+        {
+          "key": "keys.vim_normal",
+          "type": "keybinding",
+          "default": "\"jj\"",
+          "description": "Key or typed chord that returns from terminal input to NORMAL mode."
+        },
+        {
+          "key": "keys.normal.focus_left",
+          "type": "keybinding",
+          "default": "\"ctrl+h\"",
+          "description": "Focus the pane to the left. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.focus_down",
+          "type": "keybinding",
+          "default": "\"ctrl+j\"",
+          "description": "Focus the pane below. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.focus_up",
+          "type": "keybinding",
+          "default": "\"ctrl+k\"",
+          "description": "Focus the pane above. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.focus_right",
+          "type": "keybinding",
+          "default": "\"ctrl+l\"",
+          "description": "Focus the pane to the right. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.previous_tab",
+          "type": "keybinding",
+          "default": "\"h\"",
+          "description": "Select the previous tab. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.next_tab",
+          "type": "keybinding",
+          "default": "\"l\"",
+          "description": "Select the next tab. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.previous_workspace",
+          "type": "keybinding",
+          "default": "\"k\"",
+          "description": "Select the previous workspace. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.next_workspace",
+          "type": "keybinding",
+          "default": "\"j\"",
+          "description": "Select the next workspace. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.new_tab",
+          "type": "keybinding",
+          "default": "\"t\"",
+          "description": "Create a new tab. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.close_pane",
+          "type": "keybinding",
+          "default": "\"x\"",
+          "description": "Close the focused pane. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.split_down",
+          "type": "keybinding",
+          "default": "\"-\"",
+          "description": "Split the focused pane horizontally (stacked). Empty disables the override."
+        },
+        {
+          "key": "keys.normal.split_right",
+          "type": "keybinding",
+          "default": "\"V\"",
+          "description": "Split the focused pane vertically (side by side). Empty disables the override."
+        },
+        {
+          "key": "keys.normal.visual_mode",
+          "type": "keybinding",
+          "default": "\"v\"",
+          "description": "Enter visual mode for the focused pane. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.zoom",
+          "type": "keybinding",
+          "default": "\"z\"",
+          "description": "Toggle zoom for the focused pane. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.help",
+          "type": "keybinding",
+          "default": "\"?\"",
+          "description": "Open keybinding help. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.maki_sessions",
+          "type": "keybinding",
+          "default": "\"m\"",
+          "description": "Browse and resume maki sessions. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.detach",
+          "type": "keybinding",
+          "default": "\"q\"",
+          "description": "Detach the client. Empty disables the override."
+        },
+        {
+          "key": "keys.normal.rename_tab",
+          "type": "keybinding",
+          "default": "\",\"",
+          "description": "Rename the active tab. Empty disables the override."
         },
         {
           "key": "keys.indexed.tabs",

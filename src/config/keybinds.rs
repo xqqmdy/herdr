@@ -13,6 +13,145 @@ pub type KeyCombo = (KeyCode, KeyModifiers);
 /// Built-in prefix used when `keys.prefix` is unset or invalid.
 pub(crate) const DEFAULT_PREFIX: KeyCombo = (KeyCode::Char('b'), KeyModifiers::CONTROL);
 
+/// NORMAL-mode action keys layered over the prefix binding table when vim
+/// mode is enabled. `None` disables the override.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct VimNormalKeys {
+    pub focus_left: Option<KeyCombo>,
+    pub focus_down: Option<KeyCombo>,
+    pub focus_up: Option<KeyCombo>,
+    pub focus_right: Option<KeyCombo>,
+    pub previous_tab: Option<KeyCombo>,
+    pub next_tab: Option<KeyCombo>,
+    pub previous_workspace: Option<KeyCombo>,
+    pub next_workspace: Option<KeyCombo>,
+    pub new_tab: Option<KeyCombo>,
+    pub close_pane: Option<KeyCombo>,
+    pub split_down: Option<KeyCombo>,
+    pub split_right: Option<KeyCombo>,
+    pub visual_mode: Option<KeyCombo>,
+    pub zoom: Option<KeyCombo>,
+    pub help: Option<KeyCombo>,
+    pub maki_sessions: Option<KeyCombo>,
+    pub detach: Option<KeyCombo>,
+    pub rename_tab: Option<KeyCombo>,
+}
+
+/// Parsed vim mode layer. `insert` leaves NORMAL mode for terminal input,
+/// `normal` is the key sequence that returns from terminal input to NORMAL
+/// mode (usually a single key, or a typed chord like `jj`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VimKeyConfig {
+    pub insert: KeyCombo,
+    pub normal: Vec<KeyCombo>,
+    pub normal_keys: VimNormalKeys,
+}
+
+pub(crate) const DEFAULT_VIM_INSERT: KeyCombo = (KeyCode::Char('i'), KeyModifiers::empty());
+pub(crate) const DEFAULT_VIM_NORMAL: [KeyCombo; 2] = [
+    (KeyCode::Char('j'), KeyModifiers::empty()),
+    (KeyCode::Char('j'), KeyModifiers::empty()),
+];
+
+/// One key combo, or a typed character sequence like `jj` for chord exits.
+fn parse_key_sequence(
+    raw: &str,
+    what: &str,
+    diagnostics: &mut Vec<String>,
+) -> Option<Vec<KeyCombo>> {
+    let raw = raw.trim();
+    if let Some(combo) = parse_key_combo(raw) {
+        return Some(vec![combo]);
+    }
+    let sequence: Option<Vec<KeyCombo>> = raw
+        .chars()
+        .map(|c| {
+            (!c.is_control() && !c.is_whitespace())
+                .then_some((KeyCode::Char(c), KeyModifiers::empty()))
+        })
+        .collect();
+    sequence.or_else(|| {
+        diagnostics.push(format!(
+            "invalid keybinding: {what} = {raw:?}; ignoring binding"
+        ));
+        None
+    })
+}
+
+impl Default for VimKeyConfig {
+    fn default() -> Self {
+        Self {
+            insert: DEFAULT_VIM_INSERT,
+            normal: DEFAULT_VIM_NORMAL.to_vec(),
+            normal_keys: VimNormalKeys::default(),
+        }
+    }
+}
+
+impl VimKeyConfig {
+    pub(crate) fn from_keys(keys: &super::KeysConfig) -> (Self, Vec<String>) {
+        let mut diagnostics = Vec::new();
+        let normal = keys
+            .vim_normal
+            .trim()
+            .is_empty()
+            .then(|| DEFAULT_VIM_NORMAL.to_vec())
+            .or_else(|| parse_key_sequence(&keys.vim_normal, "keys.vim_normal", &mut diagnostics))
+            .unwrap_or_else(|| DEFAULT_VIM_NORMAL.to_vec());
+        let mut combo = |raw: &str, what: &str| -> Option<KeyCombo> {
+            let raw = raw.trim();
+            if raw.is_empty() {
+                return None;
+            }
+            match parse_key_combo(raw) {
+                Some(combo) => Some(combo),
+                None => {
+                    diagnostics.push(format!(
+                        "invalid keybinding: {what} = {raw:?}; ignoring binding"
+                    ));
+                    None
+                }
+            }
+        };
+        let insert = keys
+            .vim_insert
+            .trim()
+            .is_empty()
+            .then_some(DEFAULT_VIM_INSERT)
+            .or_else(|| combo(&keys.vim_insert, "keys.vim_insert"))
+            .unwrap_or(DEFAULT_VIM_INSERT);
+        let n = &keys.normal;
+        let normal_keys = VimNormalKeys {
+            focus_left: combo(&n.focus_left, "keys.normal.focus_left"),
+            focus_down: combo(&n.focus_down, "keys.normal.focus_down"),
+            focus_up: combo(&n.focus_up, "keys.normal.focus_up"),
+            focus_right: combo(&n.focus_right, "keys.normal.focus_right"),
+            previous_tab: combo(&n.previous_tab, "keys.normal.previous_tab"),
+            next_tab: combo(&n.next_tab, "keys.normal.next_tab"),
+            previous_workspace: combo(&n.previous_workspace, "keys.normal.previous_workspace"),
+            next_workspace: combo(&n.next_workspace, "keys.normal.next_workspace"),
+            new_tab: combo(&n.new_tab, "keys.normal.new_tab"),
+            close_pane: combo(&n.close_pane, "keys.normal.close_pane"),
+            split_down: combo(&n.split_down, "keys.normal.split_down"),
+            split_right: combo(&n.split_right, "keys.normal.split_right"),
+            visual_mode: combo(&n.visual_mode, "keys.normal.visual_mode"),
+            zoom: combo(&n.zoom, "keys.normal.zoom"),
+            help: combo(&n.help, "keys.normal.help"),
+            maki_sessions: combo(&n.maki_sessions, "keys.normal.maki_sessions"),
+            detach: combo(&n.detach, "keys.normal.detach"),
+            rename_tab: combo(&n.rename_tab, "keys.normal.rename_tab"),
+        };
+        (
+            Self {
+                insert,
+                normal,
+                normal_keys,
+            },
+            diagnostics,
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LiveKeybindConfig {
     /// Every configured prefix key. The first entry is the primary prefix used
@@ -21,26 +160,7 @@ pub struct LiveKeybindConfig {
     pub keybinds: Keybinds,
 }
 
-impl LiveKeybindConfig {
-    /// Whether `key` is one of the configured prefix keys.
-    pub fn matches_prefix(&self, key: &TerminalKey) -> bool {
-        self.prefix
-            .iter()
-            .any(|combo| terminal_key_matches_combo(key, *combo))
-    }
-
-    /// Primary prefix combo, used for the compact status bar.
-    pub fn primary_prefix(&self) -> Option<KeyCombo> {
-        self.prefix.first().copied()
-    }
-
-    /// Primary prefix rendered for the compact status bar.
-    pub fn primary_prefix_label(&self) -> String {
-        self.primary_prefix()
-            .map(format_key_combo)
-            .unwrap_or_else(|| format_key_combo(DEFAULT_PREFIX))
-    }
-}
+impl LiveKeybindConfig {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -338,19 +458,7 @@ pub struct CustomCommandKeybind {
 
 /// Parsed keybinds for Herdr actions.
 #[derive(Debug, Clone)]
-pub struct NavigateKeybinds {
-    pub workspace_up: ActionKeybinds,
-    pub workspace_down: ActionKeybinds,
-    pub pane_left: ActionKeybinds,
-    pub pane_down: ActionKeybinds,
-    pub pane_up: ActionKeybinds,
-    pub pane_right: ActionKeybinds,
-}
-
-/// Parsed keybinds for Herdr actions.
-#[derive(Debug, Clone)]
 pub struct Keybinds {
-    pub navigate: NavigateKeybinds,
     pub help: ActionKeybinds,
     pub settings: ActionKeybinds,
     pub new_workspace: ActionKeybinds,
@@ -359,7 +467,6 @@ pub struct Keybinds {
     pub remove_worktree: ActionKeybinds,
     pub rename_workspace: ActionKeybinds,
     pub close_workspace: ActionKeybinds,
-    pub workspace_picker: ActionKeybinds,
     pub goto: ActionKeybinds,
     pub maki_sessions: ActionKeybinds,
     pub detach: ActionKeybinds,
@@ -515,9 +622,6 @@ impl Config {
         };
         let mut registry = BindingRegistry::new(prefix_keys.clone(), prefix_source);
         registry.reserve_prefix_keys("keys.prefix", prefix_source);
-        let mut navigate_registry = BindingRegistry::new(prefix_keys.clone(), prefix_source);
-        navigate_registry.reserve_prefix_keys("keys.prefix", prefix_source);
-        reserve_navigate_runtime_keys(&mut navigate_registry);
         let prefix = prefix_keys;
 
         macro_rules! empty_action {
@@ -527,14 +631,6 @@ impl Config {
         }
 
         let mut keybinds = Keybinds {
-            navigate: NavigateKeybinds {
-                workspace_up: empty_action!(),
-                workspace_down: empty_action!(),
-                pane_left: empty_action!(),
-                pane_down: empty_action!(),
-                pane_up: empty_action!(),
-                pane_right: empty_action!(),
-            },
             help: empty_action!(),
             settings: empty_action!(),
             new_workspace: empty_action!(),
@@ -543,7 +639,6 @@ impl Config {
             remove_worktree: empty_action!(),
             rename_workspace: empty_action!(),
             close_workspace: empty_action!(),
-            workspace_picker: empty_action!(),
             goto: empty_action!(),
             maki_sessions: empty_action!(),
             detach: empty_action!(),
@@ -636,35 +731,8 @@ impl Config {
                 }
             };
         }
-        macro_rules! apply_navigate {
-            ($target:expr, $field:ident, $source:expr) => {
-                if field_source!($field) == $source {
-                    $target = parse_navigate_bindings(
-                        concat!("keys.", stringify!($field)),
-                        &self.keys.$field,
-                        &mut navigate_registry,
-                        &mut diagnostics,
-                        $source,
-                    );
-                }
-            };
-        }
 
         for source in [BindingSource::User, BindingSource::Default] {
-            apply_navigate!(
-                keybinds.navigate.workspace_up,
-                navigate_workspace_up,
-                source
-            );
-            apply_navigate!(
-                keybinds.navigate.workspace_down,
-                navigate_workspace_down,
-                source
-            );
-            apply_navigate!(keybinds.navigate.pane_left, navigate_pane_left, source);
-            apply_navigate!(keybinds.navigate.pane_down, navigate_pane_down, source);
-            apply_navigate!(keybinds.navigate.pane_up, navigate_pane_up, source);
-            apply_navigate!(keybinds.navigate.pane_right, navigate_pane_right, source);
             apply_action!(keybinds.help, help, source);
             apply_action!(keybinds.settings, settings, source);
             apply_action!(keybinds.new_workspace, new_workspace, source);
@@ -673,7 +741,6 @@ impl Config {
             apply_action!(keybinds.remove_worktree, remove_worktree, source);
             apply_action!(keybinds.rename_workspace, rename_workspace, source);
             apply_action!(keybinds.close_workspace, close_workspace, source);
-            apply_action!(keybinds.workspace_picker, workspace_picker, source);
             apply_action!(keybinds.goto, goto, source);
             apply_action!(keybinds.maki_sessions, maki_sessions, source);
             apply_action!(keybinds.detach, detach, source);
@@ -779,28 +846,6 @@ impl Config {
     }
 }
 
-fn reserve_navigate_runtime_keys(registry: &mut BindingRegistry) {
-    for combo in [
-        (KeyCode::Esc, KeyModifiers::empty()),
-        (KeyCode::Enter, KeyModifiers::empty()),
-        (KeyCode::Tab, KeyModifiers::empty()),
-        (KeyCode::BackTab, KeyModifiers::empty()),
-        (KeyCode::Tab, KeyModifiers::SHIFT),
-        (KeyCode::Left, KeyModifiers::empty()),
-        (KeyCode::Right, KeyModifiers::empty()),
-    ] {
-        registry.reserve_direct(combo, "navigate reserved keys", BindingSource::Default);
-    }
-
-    for idx in '1'..='9' {
-        registry.reserve_direct(
-            (KeyCode::Char(idx), KeyModifiers::empty()),
-            "navigate reserved keys",
-            BindingSource::Default,
-        );
-    }
-}
-
 fn append_custom_command_bindings(
     config: &Config,
     keybinds: &mut Keybinds,
@@ -876,42 +921,6 @@ fn parse_action_bindings(
         match parse_binding_string(raw) {
             Some(ParsedBinding::Single(binding)) => {
                 if reject_binding(field, &binding, registry, diagnostics, source) {
-                    continue;
-                }
-                registry.register(&binding, field, source);
-                bindings.push(binding);
-            }
-            Some(ParsedBinding::Range(_)) => {
-                let diag = format!("range keybinding is only valid for indexed actions: {field} = {raw:?}; disabling binding");
-                warn!(message = %diag, "config diagnostic");
-                diagnostics.push(diag);
-            }
-            None => {
-                let diag = format!("invalid keybinding: {field} = {raw:?}; disabling binding");
-                warn!(message = %diag, "config diagnostic");
-                diagnostics.push(diag);
-            }
-        }
-    }
-    ActionKeybinds { bindings }
-}
-
-fn parse_navigate_bindings(
-    field: &'static str,
-    config: &BindingConfig,
-    registry: &mut BindingRegistry,
-    diagnostics: &mut Vec<String>,
-    source: BindingSource,
-) -> ActionKeybinds {
-    let mut bindings = Vec::new();
-    for raw in config.values() {
-        let raw = raw.trim();
-        if raw.is_empty() {
-            continue;
-        }
-        match parse_binding_string(raw) {
-            Some(ParsedBinding::Single(binding)) => {
-                if reject_navigate_binding(field, &binding, registry, diagnostics, source) {
                     continue;
                 }
                 registry.register(&binding, field, source);
@@ -1036,47 +1045,6 @@ fn append_legacy_indexed_bindings(
             label: binding.label,
         });
     }
-}
-
-fn reject_navigate_binding(
-    field: &str,
-    binding: &ResolvedBinding,
-    registry: &BindingRegistry,
-    diagnostics: &mut Vec<String>,
-    source: BindingSource,
-) -> bool {
-    if binding.trigger.is_prefix() {
-        let diag = format!(
-            "navigate keybinding must not include prefix: {field} = {:?}; disabling binding",
-            binding.label
-        );
-        warn!(message = %diag, "config diagnostic");
-        diagnostics.push(diag);
-        return true;
-    }
-
-    if matches!(normalize_key_combo(binding.trigger.combo()).0, KeyCode::Esc) {
-        let diag = format!(
-            "navigate keybinding cannot use esc: {field} = {:?}; disabling binding",
-            binding.label
-        );
-        warn!(message = %diag, "config diagnostic");
-        diagnostics.push(diag);
-        return true;
-    }
-
-    if let Some(first_binding) = registry.conflict(binding) {
-        if source == BindingSource::Default && first_binding.source == BindingSource::User {
-            return true;
-        }
-        let first_field = &first_binding.field;
-        let diag = format!("{}: kept {first_field}, disabled {field}", binding.label);
-        warn!(message = %diag, "config diagnostic");
-        diagnostics.push(diag);
-        return true;
-    }
-
-    false
 }
 
 fn reject_binding(
@@ -1221,6 +1189,17 @@ pub fn format_key_combo(binding: KeyCombo) -> String {
 
     parts.push(key);
     parts.join("+")
+}
+
+/// Render a key sequence like `jj` for display in the mode bar and help.
+pub fn format_key_sequence(sequence: &[KeyCombo]) -> String {
+    match sequence {
+        [single] => format_key_combo(*single),
+        sequence => sequence
+            .iter()
+            .map(|combo| format_key_combo(*combo))
+            .collect(),
+    }
 }
 
 fn super_modifier_label() -> &'static str {
@@ -1973,134 +1952,6 @@ prefix = []
             .any(|diag| diag.contains("keys.prefix")));
         // A reload treats the empty list as invalid and keeps the current keybinds.
         assert!(config.live_keybinds_with_diagnostics().is_err());
-    }
-
-    #[test]
-    fn navigate_bindings_allow_plain_keys_and_reject_local_conflicts() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-navigate_workspace_up = "j"
-navigate_workspace_down = "j"
-navigate_pane_down = "ctrl+j"
-"#,
-        )
-        .unwrap();
-        let keybinds = config.keybinds();
-        let diagnostics = config.collect_diagnostics();
-
-        assert!(keybinds
-            .navigate
-            .workspace_up
-            .matches_direct_key(&TerminalKey::new(KeyCode::Char('j'), KeyModifiers::empty())));
-        assert!(keybinds.navigate.workspace_down.bindings.is_empty());
-        assert!(keybinds
-            .navigate
-            .pane_down
-            .matches_direct_key(&TerminalKey::new(KeyCode::Char('j'), KeyModifiers::CONTROL)));
-        assert!(diagnostics.iter().any(|diag| {
-            diag.contains("kept keys.navigate_workspace_up")
-                && diag.contains("disabled keys.navigate_workspace_down")
-        }));
-    }
-
-    #[test]
-    fn navigate_bindings_reject_runtime_reserved_keys() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-navigate_workspace_up = ["esc", "alt+esc", "enter", "1", "tab", "shift+tab", "left", "right"]
-"#,
-        )
-        .unwrap();
-        let keybinds = config.keybinds();
-        let diagnostics = config.collect_diagnostics();
-
-        assert!(keybinds.navigate.workspace_up.bindings.is_empty());
-        assert_eq!(
-            diagnostics
-                .iter()
-                .filter(|diag| {
-                    (diag.contains("navigate reserved keys")
-                        || diag.contains("navigate keybinding cannot use esc"))
-                        && diag.contains("keys.navigate_workspace_up")
-                })
-                .count(),
-            8
-        );
-    }
-
-    #[test]
-    fn navigate_bindings_can_reuse_navigate_mode_prefix_rhs_keys() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-navigate_workspace_down = ["n", "f"]
-
-[[keys.command]]
-key = "prefix+f"
-command = "echo hi"
-"#,
-        )
-        .unwrap();
-        let keybinds = config.keybinds();
-        let diagnostics = config.collect_diagnostics();
-
-        assert!(keybinds
-            .navigate
-            .workspace_down
-            .matches_direct_key(&TerminalKey::new(KeyCode::Char('n'), KeyModifiers::empty())));
-        assert!(keybinds
-            .navigate
-            .workspace_down
-            .matches_direct_key(&TerminalKey::new(KeyCode::Char('f'), KeyModifiers::empty())));
-        assert!(!keybinds.custom_commands.is_empty());
-        assert!(!diagnostics.iter().any(|diag| {
-            diag.contains("disabled keys.navigate_workspace_down")
-                && (diag.contains("keys.next_tab") || diag.contains("keys.command"))
-        }));
-    }
-
-    #[test]
-    fn navigate_bindings_do_not_conflict_with_general_focus_pane_bindings() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-navigate_pane_down = "j"
-"#,
-        )
-        .unwrap();
-        let keybinds = config.keybinds();
-
-        assert!(keybinds
-            .navigate
-            .pane_down
-            .matches_direct_key(&TerminalKey::new(KeyCode::Char('j'), KeyModifiers::empty())));
-    }
-
-    #[test]
-    fn navigate_bindings_reject_prefix_syntax_and_prefix_key() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-prefix = "ctrl+a"
-navigate_workspace_up = "prefix+j"
-navigate_workspace_down = "ctrl+a"
-"#,
-        )
-        .unwrap();
-        let keybinds = config.keybinds();
-        let diagnostics = config.collect_diagnostics();
-
-        assert!(keybinds.navigate.workspace_up.bindings.is_empty());
-        assert!(keybinds.navigate.workspace_down.bindings.is_empty());
-        assert!(diagnostics.iter().any(|diag| {
-            diag.contains("navigate keybinding must not include prefix")
-                && diag.contains("keys.navigate_workspace_up")
-        }));
-        assert!(diagnostics.iter().any(|diag| {
-            diag.contains("kept keys.prefix") && diag.contains("keys.navigate_workspace_down")
-        }));
     }
 
     #[test]

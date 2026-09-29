@@ -428,17 +428,6 @@ fn keyboard_copy_mode_owns_cursor_selection_copy_and_scroll_restore() {
     );
     assert!(enter.actions.is_empty());
 
-    state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        KeyCode::Char('b'),
-        KeyModifiers::CONTROL,
-    ))]);
-    assert_eq!(state.mode, ClientShellMode::Prefix);
-    state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        KeyCode::Esc,
-        KeyModifiers::empty(),
-    ))]);
-    assert_eq!(state.mode, ClientShellMode::Copy);
-
     let page = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
         KeyCode::PageUp,
         KeyModifiers::empty(),
@@ -500,7 +489,7 @@ fn keyboard_copy_mode_owns_cursor_selection_copy_and_scroll_restore() {
         KeyCode::Char('y'),
         KeyModifiers::empty(),
     ))]);
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     assert!(state.copy_mode.is_none());
     assert!(state.selection.is_none());
     assert_eq!(copy.actions.len(), 2);
@@ -568,7 +557,7 @@ fn keyboard_selections_survive_output_and_copy_live_ranges() {
                         && (params.anchor.row, params.anchor.col) == range.0
                         && (params.cursor.row, params.cursor.col) == range.1)
         )));
-        assert_eq!(state.mode, ClientShellMode::Terminal);
+        assert_eq!(state.mode, ClientShellMode::VimNormal);
         assert!(state.selection.is_none());
         assert!(state.copy_mode.is_none());
     }
@@ -927,7 +916,7 @@ fn copy_search_owns_prompt_repeat_highlights_selection_and_restore() {
         KeyCode::Esc,
         KeyModifiers::empty(),
     ))]);
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     assert!(exit.actions.iter().any(|action| matches!(
         action,
         ClientShellAction::Endpoint { request, .. }
@@ -1850,24 +1839,14 @@ fn copy_mode_survives_mouse_motion_and_parks_across_focus_changes() {
         right_click_passthrough: false,
     });
     state.set_snapshot(Box::new(unfocused.clone()));
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     assert!(state
         .copy_mode
         .as_ref()
         .is_some_and(|copy_mode| copy_mode.selection.is_some()));
 
-    let (prefix_key, prefix_modifiers) = state.config.keybinds.prefix[0];
-    state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        prefix_key,
-        prefix_modifiers,
-    ))]);
     state.set_snapshot(Box::new(unfocused.clone()));
-    assert_eq!(state.mode, ClientShellMode::Prefix);
-    state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        KeyCode::Esc,
-        KeyModifiers::empty(),
-    ))]);
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
 
     let mut other_selection =
         crate::selection::Selection::absolute_range("pane_2".to_owned(), (0, 0), (0, 1));
@@ -1913,12 +1892,6 @@ fn copy_mode_survives_mouse_motion_and_parks_across_focus_changes() {
         .as_ref()
         .is_some_and(|selection| selection.pane_id == "pane_1"));
 
-    state.mode = ClientShellMode::Navigate;
-    state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        KeyCode::Esc,
-        KeyModifiers::empty(),
-    ))]);
-    assert_eq!(state.mode, ClientShellMode::Copy);
     assert!(state
         .selection
         .as_ref()
@@ -2056,7 +2029,7 @@ fn queued_copy_keys_preserve_prefix_order() {
             content_revision: 0,
         }),
     );
-    assert_eq!(state.mode, ClientShellMode::Prefix);
+    assert_eq!(state.mode, ClientShellMode::Copy);
     assert_eq!(
         state
             .copy_mode
@@ -2136,7 +2109,7 @@ fn copy_waits_for_endpoint_motion_before_copying_selection() {
             content_revision: 0,
         }),
     );
-    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
     assert!(actions.iter().any(|action| matches!(
         action,
         ClientShellAction::Endpoint { request, .. }

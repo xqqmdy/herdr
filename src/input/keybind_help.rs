@@ -64,57 +64,33 @@ fn indexed_range_prefix(bindings: &[IndexedKeybind]) -> Option<&str> {
 pub(crate) fn keybind_help_groups(
     keybinds: &Keybinds,
     prefixes: &[crate::config::KeyCombo],
+    vim: &crate::config::VimKeyConfig,
 ) -> Vec<KeybindHelpGroup> {
+    let global = vec![
+        entry(crate::config::format_prefix_combos(prefixes), "prefix mode"),
+        entry(
+            crate::config::format_key_combo(vim.insert),
+            "terminal input",
+        ),
+        entry(
+            crate::config::format_key_sequence(&vim.normal),
+            "normal mode",
+        ),
+        entry(binding_label(&keybinds.help), "keybinds"),
+        entry(binding_label(&keybinds.settings), "settings"),
+        entry(binding_label(&keybinds.detach), "detach"),
+        entry(binding_label(&keybinds.reload_config), "reload config"),
+        entry(
+            binding_label(&keybinds.open_notification_target),
+            "open notification target",
+        ),
+        entry(binding_label(&keybinds.maki_sessions), "maki sessions"),
+    ];
     let mut groups = vec![
-        (
-            "global",
-            vec![
-                entry(crate::config::format_prefix_combos(prefixes), "prefix mode"),
-                entry(binding_label(&keybinds.help), "keybinds"),
-                entry(binding_label(&keybinds.settings), "settings"),
-                entry(binding_label(&keybinds.detach), "detach"),
-                entry(binding_label(&keybinds.reload_config), "reload config"),
-                entry(
-                    binding_label(&keybinds.open_notification_target),
-                    "open notification target",
-                ),
-                entry(binding_label(&keybinds.maki_sessions), "maki sessions"),
-            ],
-        ),
-        (
-            "navigation",
-            vec![
-                entry("esc", "back"),
-                entry(
-                    format!(
-                        "{} / {}",
-                        binding_label(&keybinds.navigate.workspace_up),
-                        binding_label(&keybinds.navigate.workspace_down)
-                    ),
-                    "workspace list",
-                ),
-                entry(
-                    format!(
-                        "{} / {} / {} / {} / left / right",
-                        binding_label(&keybinds.navigate.pane_left),
-                        binding_label(&keybinds.navigate.pane_down),
-                        binding_label(&keybinds.navigate.pane_up),
-                        binding_label(&keybinds.navigate.pane_right)
-                    ),
-                    "move focus",
-                ),
-                entry("tab / shift+tab", "cycle pane"),
-                entry("enter", "open workspace"),
-                entry("1..9", "switch workspace"),
-            ],
-        ),
+        ("global", global),
         (
             "workspaces / tabs",
             vec![
-                entry(
-                    binding_label(&keybinds.workspace_picker),
-                    "workspace navigation",
-                ),
                 entry(binding_label(&keybinds.goto), "session navigator"),
                 entry(binding_label(&keybinds.new_workspace), "new workspace"),
                 entry(binding_label(&keybinds.new_worktree), "new worktree"),
@@ -162,7 +138,7 @@ pub(crate) fn keybind_help_groups(
                 entry(binding_label(&keybinds.rename_pane), "rename pane"),
                 entry(binding_label(&keybinds.edit_scrollback), "edit scrollback"),
                 entry(binding_label(&keybinds.clear_pane), "clear pane"),
-                entry(binding_label(&keybinds.copy_mode), "copy mode"),
+                entry(binding_label(&keybinds.copy_mode), "visual mode"),
                 entry(binding_label(&keybinds.zoom), "zoom pane"),
                 entry(binding_label(&keybinds.resize_mode), "resize mode"),
                 entry(
@@ -215,7 +191,93 @@ pub(crate) fn keybind_help_groups(
                 .collect(),
         ));
     }
+    for (group, entries) in &mut groups {
+        entries.retain(|(_, label)| {
+            !((group == &"global" && label == "prefix mode")
+                || (group == &"workspaces / tabs" && label == "workspace navigation"))
+        });
+    }
+    let nk = &vim.normal_keys;
+    let overrides = [
+        ("global", "keybinds", nk.help),
+        ("global", "detach", nk.detach),
+        ("global", "maki sessions", nk.maki_sessions),
+        ("workspaces / tabs", "new tab", nk.new_tab),
+        ("workspaces / tabs", "rename tab", nk.rename_tab),
+        ("workspaces / tabs", "previous tab", nk.previous_tab),
+        ("workspaces / tabs", "next tab", nk.next_tab),
+        (
+            "workspaces / tabs",
+            "previous workspace",
+            nk.previous_workspace,
+        ),
+        ("workspaces / tabs", "next workspace", nk.next_workspace),
+        ("panes", "split vertical", nk.split_right),
+        ("panes", "split horizontal", nk.split_down),
+        ("panes", "close pane", nk.close_pane),
+        ("panes", "visual mode", nk.visual_mode),
+        ("panes", "zoom pane", nk.zoom),
+        ("panes", "focus pane left", nk.focus_left),
+        ("panes", "focus pane down", nk.focus_down),
+        ("panes", "focus pane up", nk.focus_up),
+        ("panes", "focus pane right", nk.focus_right),
+    ];
+    for (group, entries) in &mut groups {
+        for (shortcut, label) in entries {
+            let over = overrides
+                .iter()
+                .find(|(g, l, _)| *g == *group && **l == **label)
+                .and_then(|(_, _, combo)| *combo)
+                .map(crate::config::format_key_combo);
+            // In NORMAL mode every prefix binding fires without the prefix,
+            // so bare action keys replace the prefix form everywhere.
+            let stripped = shortcut.replace("prefix+", "");
+            *shortcut = if stripped == "unset" {
+                over.unwrap_or_else(|| "unset".to_owned())
+            } else {
+                match over.as_deref() {
+                    Some(over) if stripped != over => format!("{stripped}/{over}"),
+                    _ => stripped,
+                }
+            };
+        }
+    }
+    for (_, entries) in &mut groups {
+        for (shortcut, _) in entries {
+            *shortcut = collapse_shift_letters(shortcut);
+        }
+    }
     groups
+}
+
+/// Fold `shift+<letter>` into the uppercase letter (shift+r -> R).
+fn collapse_shift_letters(shortcut: &str) -> String {
+    if !shortcut.contains("shift+") {
+        return shortcut.to_owned();
+    }
+    let mut result = String::with_capacity(shortcut.len());
+    let mut consumed = 0;
+    for (start, _) in shortcut.match_indices("shift+") {
+        if start < consumed {
+            continue;
+        }
+        result.push_str(&shortcut[consumed..start]);
+        let mut chars = shortcut[start + 6..].chars();
+        let letter = chars.next();
+        let boundary = chars.next().is_none_or(|next| !next.is_alphanumeric());
+        match (letter, boundary) {
+            (Some(c), true) if c.is_ascii_alphabetic() => {
+                result.push(c.to_ascii_uppercase());
+                consumed = start + 6 + c.len_utf8();
+            }
+            _ => {
+                result.push_str("shift+");
+                consumed = start + 6;
+            }
+        }
+    }
+    result.push_str(&shortcut[consumed..]);
+    result
 }
 
 pub(crate) fn filter_keybind_help_groups(
@@ -277,9 +339,14 @@ mod tests {
                 (KeyCode::Char(' '), KeyModifiers::CONTROL),
                 (KeyCode::Char('s'), KeyModifiers::CONTROL),
             ],
+            &crate::config::VimKeyConfig::default(),
         );
         let global = &groups[0].1;
-        assert_eq!(global[0].0, "ctrl+space / ctrl+s");
-        assert_eq!(global[0].1, "prefix mode");
+        // Vim mode is the ground truth: the help opens with the NORMAL/INSERT
+        // switch keys instead of a prefix-mode entry.
+        assert_eq!(global[0].0, "i");
+        assert_eq!(global[0].1, "terminal input");
+        assert_eq!(global[1].0, "jj");
+        assert_eq!(global[1].1, "normal mode");
     }
 }
