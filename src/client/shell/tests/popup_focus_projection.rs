@@ -384,35 +384,6 @@ fn pending_popup_suppresses_held_pane_repeats_but_preserves_release() {
 }
 
 #[test]
-fn prefix_input_source_changes_are_client_owned_and_focus_safe() {
-    let mut config = ClientShellConfig::from_config(&Config::default());
-    config.switch_ascii_input_source_in_prefix = true;
-    let mut state = ClientShellState::new(config);
-    state.set_snapshot(Box::new(snapshot()));
-    state.set_pane_surface(surface());
-    assert!(state.take_input_source_changes().is_empty());
-
-    let enter_resize = crate::input::TerminalKey::new(KeyCode::Char('r'), KeyModifiers::empty());
-    let escape = crate::input::TerminalKey::new(KeyCode::Esc, KeyModifiers::empty());
-
-    state.handle_raw_events(vec![RawInputEvent::Key(enter_resize.clone())]);
-    assert_eq!(state.mode, ClientShellMode::Resize);
-    assert_eq!(state.take_input_source_changes(), vec![true]);
-
-    state.handle_raw_events(vec![RawInputEvent::Key(escape.clone())]);
-    state.reconcile_input_source();
-    assert_eq!(state.take_input_source_changes(), vec![false]);
-
-    state.handle_raw_events(vec![RawInputEvent::Key(enter_resize)]);
-    assert_eq!(state.mode, ClientShellMode::Resize);
-    assert_eq!(state.take_input_source_changes(), vec![true]);
-
-    state.handle_raw_events(vec![RawInputEvent::Key(escape)]);
-    state.reconcile_input_source();
-    assert_eq!(state.take_input_source_changes(), vec![false]);
-}
-
-#[test]
 fn focus_loss_releases_held_pane_keys_before_reporting_focus() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));

@@ -20,7 +20,6 @@ pub(super) use endpoints::*;
 mod global_menu;
 mod graphics;
 mod input;
-mod input_source;
 mod link_hover;
 mod maki_sessions;
 mod mobile;

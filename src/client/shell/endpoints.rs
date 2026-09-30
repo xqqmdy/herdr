@@ -105,7 +105,6 @@ impl ClientShellState {
         self.mode = ClientShellMode::Terminal;
         self.snapshot = None;
         self.graphics.set_scope("local:unavailable");
-        self.reconcile_input_source();
     }
 
     pub(crate) fn retire_endpoint(&mut self, endpoint_id: &ClientEndpointId) {

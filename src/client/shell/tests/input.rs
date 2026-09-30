@@ -272,17 +272,6 @@ fn delayed_link_fallback_does_not_replay_against_changed_geometry() {
 }
 
 #[test]
-fn invalid_experimental_reload_keeps_input_source_preference() {
-    let mut shell = ClientShellConfig::from_config(&Config::default());
-    shell.switch_ascii_input_source_in_prefix = true;
-    let config = Config::default();
-    shell.apply_live_config(&config, &[], &["experimental".to_owned()]);
-    assert!(shell.switch_ascii_input_source_in_prefix);
-    shell.apply_live_config(&config, &[], &[]);
-    assert!(!shell.switch_ascii_input_source_in_prefix);
-}
-
-#[test]
 fn physical_release_uses_the_leased_press_code_with_current_modifiers() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));

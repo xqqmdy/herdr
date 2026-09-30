@@ -46,7 +46,6 @@ pub(crate) struct ClientShellConfig {
     pub(super) mouse_scroll_lines: usize,
     pub(super) right_click_passthrough_modifiers: Option<crossterm::event::KeyModifiers>,
     pub(super) redraw_on_focus_gained: bool,
-    pub(super) switch_ascii_input_source_in_prefix: bool,
     pub(super) local_config_path: std::path::PathBuf,
     pub(super) preferences_path: Option<std::path::PathBuf>,
     pub(super) preferences: preferences::ClientChromePreferences,
@@ -944,8 +943,6 @@ pub(crate) struct ClientShellState {
     pub(super) endpoint_notice_seen: HashSet<ClientEndpointNoticeKey>,
     pub(super) visible_endpoint_notice: Option<ClientVisibleEndpointNotice>,
     pub(super) outer_focused: Option<bool>,
-    pub(super) ascii_input_source_active: bool,
-    pub(super) pending_input_source_changes: Vec<bool>,
     pub(super) host_appearance: Option<crate::terminal_theme::HostAppearance>,
     pub(super) host_appearance_explicit: bool,
     pub(super) host_background: Option<crate::terminal_theme::RgbColor>,
@@ -1125,8 +1122,6 @@ impl ClientShellState {
             endpoint_notice_seen: HashSet::new(),
             visible_endpoint_notice: None,
             outer_focused: None,
-            ascii_input_source_active: false,
-            pending_input_source_changes: Vec::new(),
             host_appearance: None,
             host_appearance_explicit: false,
             host_background: None,
@@ -1619,7 +1614,6 @@ impl ClientShellState {
             }
         }
         self.resume_mobile_switcher_if_ready();
-        self.reconcile_input_source();
     }
 
     pub(crate) fn has_presented_surface(&self) -> bool {
@@ -1822,7 +1816,6 @@ impl ClientShellState {
         self.pane_surface_generation = self.active_snapshot_generation;
         self.invalidate_link_hover();
         self.resume_mobile_switcher_if_ready();
-        self.reconcile_input_source();
     }
 
     pub(crate) fn tick_popup_pending(&mut self, now: std::time::Instant) {

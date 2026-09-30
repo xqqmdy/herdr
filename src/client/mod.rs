@@ -637,10 +637,6 @@ async fn run_client_loop(
         catalog_reload::watch_profiles(event_tx.clone(), should_quit.clone());
     }
 
-    // This (foreground) client owns the prefix ASCII input-source switch
-    // (implemented on macOS and Windows; a no-op on other platforms).
-    let mut prefix_input_source = crate::platform::RealPrefixInputSource::default();
-
     // Main event loop.
     let mut client_timer = timer::ClientLoopTimer::new();
     #[cfg(windows)]
@@ -721,7 +717,6 @@ async fn run_client_loop(
                         }
                     }
                 }
-                apply_client_shell_input_source_changes(&mut state, &mut prefix_input_source);
                 if let Some(shell) = state.shell.as_mut() {
                     let cleanup = shell.take_pending_graphics_cleanup();
                     let frame = shell.compose(state.reported_size.0, state.reported_size.1);
@@ -867,7 +862,6 @@ async fn run_client_loop(
                         &mut write_stream,
                         &mut pending_activation,
                         &mut endpoint_commands,
-                        &mut prefix_input_source,
                         &mut scheduled_activation,
                     )? {
                         return Ok(());
@@ -1059,7 +1053,6 @@ async fn run_client_loop(
                         &mut write_stream,
                         &mut pending_activation,
                         &mut endpoint_commands,
-                        &mut prefix_input_source,
                         &mut scheduled_activation,
                     )? {
                         return Ok(());
@@ -1163,7 +1156,6 @@ async fn run_client_loop(
                         &mut write_stream,
                         &mut pending_activation,
                         &mut endpoint_commands,
-                        &mut prefix_input_source,
                         &mut scheduled_activation,
                     )? {
                         return Ok(());
@@ -1477,10 +1469,6 @@ async fn run_client_loop(
                         } else {
                             None
                         };
-                        apply_client_shell_input_source_changes(
-                            &mut state,
-                            &mut prefix_input_source,
-                        );
                         if let Some(frame) = composed {
                             state.present_frame(frame);
                         }
@@ -1510,10 +1498,6 @@ async fn run_client_loop(
                             Some(shell::ClientPaneSurfacePatchOutcome::Applied(None)) => true,
                             Some(shell::ClientPaneSurfacePatchOutcome::Rejected) | None => false,
                         };
-                        apply_client_shell_input_source_changes(
-                            &mut state,
-                            &mut prefix_input_source,
-                        );
                         if compose_fallback {
                             let composed = state.shell.as_mut().and_then(|shell| {
                                 shell.compose(state.reported_size.0, state.reported_size.1)
@@ -1856,13 +1840,6 @@ async fn run_client_loop(
                                 }
                             },
                         );
-                        if let Some(shell) = state.shell.as_mut() {
-                            shell.reconcile_input_source();
-                        }
-                        apply_client_shell_input_source_changes(
-                            &mut state,
-                            &mut prefix_input_source,
-                        );
                         let (replay_mouse, dispatch_repaint) = dispatch_client_shell_actions(
                             actions,
                             &mut endpoint_commands,
@@ -1900,7 +1877,6 @@ async fn run_client_loop(
                                 &mut write_stream,
                                 &mut pending_activation,
                                 &mut endpoint_commands,
-                                &mut prefix_input_source,
                                 &mut scheduled_activation,
                             )? {
                                 return Ok(());
@@ -1934,7 +1910,6 @@ async fn run_client_loop(
                         &mut pending_activation,
                         &host_mouse_capture_active,
                         &host_sgr_pixels_active,
-                        &mut prefix_input_source,
                     )?,
                     ServerMessage::MouseCapture {
                         enabled,
@@ -2085,7 +2060,6 @@ async fn run_client_loop(
                             snapshot,
                             projection_pending,
                             &mut write_stream,
-                            &mut prefix_input_source,
                         )?;
                         if matches!(
                             activation_progress,
@@ -2264,7 +2238,6 @@ async fn run_client_loop(
                         &mut write_stream,
                         &mut pending_activation,
                         &mut endpoint_commands,
-                        &mut prefix_input_source,
                         &mut scheduled_activation,
                     )? {
                         return Ok(());

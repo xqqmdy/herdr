@@ -132,10 +132,9 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # manifest_check = true
 
 [keys]
-# Prefix key to enter prefix mode (default: "ctrl+b")
-# Examples: "ctrl+b", "f12", "esc", "-"
-# Action bindings use explicit syntax: "prefix+n" requires the prefix;
-# "ctrl+alt+n" is a direct terminal-mode shortcut.
+# Prefix key(s), e.g. "prefix+n" bindings require one of these first. In NORMAL
+# mode the prefix key itself is forwarded to the focused pane.
+# Examples: "ctrl+b", "f12", "esc", "-"; use an array to accept several.
 # Accepted key syntax: plain keys, ctrl/shift/alt/cmd/super modifiers, and special keys like enter/tab/esc/left/right/up/down.
 # Named punctuation such as minus, comma, ampersand, plus, and backtick is also accepted.
 # Most reliable direct bindings are ctrl+letter, function keys, and explicit modified chords.
@@ -191,15 +190,6 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # resize_pane_up = ""     # optional, e.g. "ctrl+shift+alt+up"
 # resize_pane_right = ""  # optional, e.g. "ctrl+shift+alt+right"
 # toggle_sidebar = "prefix+b"
-
-# Navigate-mode movement. These local shortcuts win while navigate mode is open.
-# They are independent from focus_pane_*. Do not include prefix+, esc, enter, tab, or 1..9 here.
-# navigate_workspace_up = "up"
-# navigate_workspace_down = "down"
-# navigate_pane_left = "h"      # left arrow always focuses the pane to the left
-# navigate_pane_down = "j"
-# navigate_pane_up = "k"
-# navigate_pane_right = "l"     # right arrow always focuses the pane to the right
 
 # Vim-style NORMAL/INSERT mode layer. The prefix is not needed:
 # every keypress resolves through the bindings above, unmatched keys are
@@ -438,13 +428,6 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # allow_nested = false
 # Save recent pane screen history across full server restarts.
 pane_history = false
-# While prefix mode is active, temporarily switch the host input source to
-# an ASCII-capable mode so prefix commands register even when an IME is
-# active, then restore the previous input source when prefix mode exits. On
-# macOS this selects the ASCII-capable keyboard layout; on Windows it toggles
-# a Korean IME between Hangul and English (other IME languages are left
-# unchanged). macOS and Windows only; best-effort. Default: false.
-# switch_ascii_input_source_in_prefix = false
 # Expose the focused pane's cursor to the outer terminal so macOS input
 # methods keep tracking the candidate window when TUIs paint their own
 # cursor (Claude Code, pi, codex). Trade-off: extra cursor visible for

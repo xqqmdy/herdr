@@ -63,11 +63,9 @@ fn indexed_range_prefix(bindings: &[IndexedKeybind]) -> Option<&str> {
 
 pub(crate) fn keybind_help_groups(
     keybinds: &Keybinds,
-    prefixes: &[crate::config::KeyCombo],
     vim: &crate::config::VimKeyConfig,
 ) -> Vec<KeybindHelpGroup> {
     let global = vec![
-        entry(crate::config::format_prefix_combos(prefixes), "prefix mode"),
         entry(
             crate::config::format_key_combo(vim.insert),
             "terminal input",
@@ -190,12 +188,6 @@ pub(crate) fn keybind_help_groups(
                 })
                 .collect(),
         ));
-    }
-    for (group, entries) in &mut groups {
-        entries.retain(|(_, label)| {
-            !((group == &"global" && label == "prefix mode")
-                || (group == &"workspaces / tabs" && label == "workspace navigation"))
-        });
     }
     let nk = &vim.normal_keys;
     let overrides = [
@@ -332,13 +324,9 @@ mod tests {
     }
 
     #[test]
-    fn help_lists_every_configured_prefix() {
+    fn help_opens_with_vim_mode_switch_keys() {
         let groups = keybind_help_groups(
             &Keybinds::default(),
-            &[
-                (KeyCode::Char(' '), KeyModifiers::CONTROL),
-                (KeyCode::Char('s'), KeyModifiers::CONTROL),
-            ],
             &crate::config::VimKeyConfig::default(),
         );
         let global = &groups[0].1;

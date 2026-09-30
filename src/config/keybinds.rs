@@ -1364,18 +1364,6 @@ fn parse_prefix_keys(config: &BindingConfig) -> (Vec<KeyCombo>, Option<String>, 
     (combos, None, diagnostics)
 }
 
-/// Render all configured prefix keys for the help panel.
-pub fn format_prefix_combos(prefixes: &[KeyCombo]) -> String {
-    if prefixes.is_empty() {
-        return format_key_combo(DEFAULT_PREFIX);
-    }
-    prefixes
-        .iter()
-        .map(|combo| format_key_combo(*combo))
-        .collect::<Vec<_>>()
-        .join(" / ")
-}
-
 pub fn normalize_key_combo((mut code, mut modifiers): KeyCombo) -> KeyCombo {
     if matches!(code, KeyCode::Tab) && modifiers.contains(KeyModifiers::SHIFT) {
         code = KeyCode::BackTab;

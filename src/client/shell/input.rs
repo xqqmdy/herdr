@@ -176,11 +176,9 @@ impl ClientShellState {
                                 | ClientShellOverlay::ReleaseNotes(_)
                         )
                     ) {
-                        self.reconcile_input_source();
                         continue;
                     }
                     if self.prepare_committed_text(&text, &mut outcome) {
-                        self.reconcile_input_source();
                         continue;
                     }
                     if let Some(target) = self.popup_input_target() {
@@ -209,11 +207,9 @@ impl ClientShellState {
                                 | ClientShellOverlay::ReleaseNotes(_)
                         )
                     ) {
-                        self.reconcile_input_source();
                         continue;
                     }
                     if self.prepare_committed_text(&text, &mut outcome) {
-                        self.reconcile_input_source();
                         continue;
                     }
                     if let Some(target) = self.popup_input_target() {
@@ -290,7 +286,6 @@ impl ClientShellState {
                 | RawInputEvent::HostCellSizeReport { .. }
                 | RawInputEvent::Unsupported => {}
             }
-            self.reconcile_input_source();
         }
         outcome.repaint |= self.resume_mobile_switcher_if_ready();
         outcome

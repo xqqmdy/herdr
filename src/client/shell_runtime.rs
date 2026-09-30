@@ -130,24 +130,6 @@ pub(super) fn clear_endpoint_host_effects(
     let _ = crate::terminal_effects::write_window_title(&mut std::io::stdout(), None);
 }
 
-pub(super) fn apply_client_shell_input_source_changes(
-    state: &mut ClientState,
-    prefix_input_source: &mut impl crate::platform::PrefixInputSource,
-) {
-    let changes = state
-        .shell
-        .as_mut()
-        .map(shell::ClientShellState::take_input_source_changes)
-        .unwrap_or_default();
-    for active in changes {
-        if active {
-            prefix_input_source.switch_to_ascii();
-        } else {
-            prefix_input_source.restore();
-        }
-    }
-}
-
 fn install_pending_activation(
     state: &mut ClientState,
     endpoint_commands: &mut endpoint_commands::EndpointCommands,
@@ -610,7 +592,6 @@ pub(super) fn install_client_shell_snapshot(
     snapshot: Box<crate::protocol::ClientShellSnapshot>,
     projection_pending: bool,
     endpoints: &mut endpoint::EndpointRegistry,
-    prefix_input_source: &mut impl crate::platform::PrefixInputSource,
 ) -> Result<(), ClientError> {
     let Some(connection) = endpoints.connection(endpoint_id) else {
         return Ok(());
@@ -655,7 +636,6 @@ pub(super) fn install_client_shell_snapshot(
     } else {
         (None, None, Vec::new())
     };
-    apply_client_shell_input_source_changes(state, prefix_input_source);
     state.present_graphics(&graphics_cleanup);
     if let Some(resize) = resize {
         endpoints.send_to(endpoint_id, &resize);
@@ -677,10 +657,8 @@ pub(super) fn finish_client_shell_input(
     endpoints: &mut endpoint::EndpointRegistry,
     pending_activation: &mut Option<endpoint::PendingEndpointActivation>,
     endpoint_commands: &mut endpoint_commands::EndpointCommands,
-    prefix_input_source: &mut impl crate::platform::PrefixInputSource,
     scheduled_activation: &mut Option<ClientLoopEvent>,
 ) -> Result<bool, ClientError> {
-    apply_client_shell_input_source_changes(state, prefix_input_source);
     if outcome.detach {
         let _ = write_to_server(endpoints, &ClientMessage::Detach);
         return Ok(true);

@@ -586,8 +586,6 @@ fn render_onboarding_overlay(b: &mut Buffer, p: &Palette) -> Option<OverlayRende
     let mut key_x = content.x;
     for (value, style) in [
         ("  ", base),
-        (crate::ui::ONBOARDING_PREFIX_LABEL, accent),
-        (crate::ui::ONBOARDING_PREFIX_SUFFIX, text),
         (crate::ui::ONBOARDING_HELP_LABEL, accent),
         (crate::ui::ONBOARDING_HELP_SUFFIX, text),
     ] {
@@ -1164,7 +1162,7 @@ fn help_lines(
     use ratatui::text::{Line, Span};
 
     let groups = crate::input::filter_keybind_help_groups(
-        crate::input::keybind_help_groups(&keybinds.keybinds, &keybinds.prefix, vim),
+        crate::input::keybind_help_groups(&keybinds.keybinds, vim),
         query,
     );
     let key_width = groups
