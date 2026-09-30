@@ -528,8 +528,8 @@ fn pane_mouse_release_survives_popup_open_transition() {
 fn popup_command_blocks_underlying_input_until_surface_or_error() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     let binding = crate::config::CustomCommandKeybind {
-        bindings: crate::config::ActionKeybinds::prefix("t"),
-        label: "prefix+t".into(),
+        bindings: crate::config::ActionKeybinds::direct("t"),
+        label: "t".into(),
         command: "secret-popup-command".into(),
         action: crate::config::CustomCommandAction::Popup,
         description: None,
@@ -582,8 +582,8 @@ fn popup_command_blocks_underlying_input_until_surface_or_error() {
     ));
 
     let binding = crate::config::CustomCommandKeybind {
-        bindings: crate::config::ActionKeybinds::prefix("t"),
-        label: "prefix+t".into(),
+        bindings: crate::config::ActionKeybinds::direct("t"),
+        label: "t".into(),
         command: "secret-popup-command".into(),
         action: crate::config::CustomCommandAction::Popup,
         description: None,

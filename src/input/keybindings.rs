@@ -4,12 +4,6 @@ use crate::config::{CustomCommandKeybind, KeyCombo, Keybinds};
 
 use super::TerminalKey;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum KeybindDispatch {
-    Direct,
-    Prefix,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) enum KeybindMatch {
     Action(KeybindAction),
@@ -72,25 +66,43 @@ pub(crate) enum KeybindAction {
     OpenMakiSessions,
 }
 
-pub(crate) fn resolve_direct_binding(
-    keybinds: &Keybinds,
-    key: &TerminalKey,
-) -> Option<KeybindMatch> {
-    resolve_exact_binding(keybinds, key, KeybindDispatch::Direct)
-}
-
-pub(crate) fn resolve_prefix_binding(
-    keybinds: &Keybinds,
-    key: &TerminalKey,
-) -> Option<KeybindMatch> {
-    resolve_exact_binding(keybinds, key, KeybindDispatch::Prefix).or_else(|| {
-        generated_character_key(key).and_then(|generated_key| {
-            resolve_exact_binding(keybinds, &generated_key, KeybindDispatch::Prefix)
-        })
+pub(crate) fn resolve_binding(keybinds: &Keybinds, key: &TerminalKey) -> Option<KeybindMatch> {
+    resolve_exact_binding(keybinds, key).or_else(|| {
+        generated_character_key(key)
+            .and_then(|generated| resolve_exact_binding(keybinds, &generated))
     })
 }
 
-/// NORMAL-mode key overrides, resolved before the prefix binding table.
+/// Bindings that stay live while a pane receives typed input: modified chords
+/// only, so unmodified printable keys keep typing.
+pub(crate) fn resolve_modified_binding(
+    keybinds: &Keybinds,
+    key: &TerminalKey,
+) -> Option<KeybindMatch> {
+    let matches = |bindings: &crate::config::ActionKeybinds, _key: &TerminalKey| {
+        bindings.matches_modified_key(_key)
+    };
+    non_indexed_action_with(keybinds, key, &matches)
+        .map(KeybindMatch::Action)
+        .or_else(|| {
+            keybinds
+                .custom_commands
+                .iter()
+                .find(|binding| matches(&binding.bindings, key))
+                .cloned()
+                .map(KeybindMatch::Command)
+        })
+        .or_else(|| indexed_action_with(keybinds, key, true).map(KeybindMatch::Action))
+}
+
+fn resolve_exact_binding(keybinds: &Keybinds, key: &TerminalKey) -> Option<KeybindMatch> {
+    non_indexed_action(keybinds, key)
+        .map(KeybindMatch::Action)
+        .or_else(|| custom_command(keybinds, key).map(KeybindMatch::Command))
+        .or_else(|| indexed_action(keybinds, key).map(KeybindMatch::Action))
+}
+
+/// NORMAL-mode key overrides, resolved before the action binding table.
 pub(crate) fn resolve_vim_normal_action(
     keys: &crate::config::VimNormalKeys,
     key: &TerminalKey,
@@ -125,10 +137,14 @@ pub(crate) fn resolve_vim_normal_action(
     .find_map(|(combo, action)| matches(combo, action))
 }
 
-pub(crate) fn resolve_non_indexed_action(
+fn non_indexed_action(keybinds: &Keybinds, key: &TerminalKey) -> Option<KeybindAction> {
+    non_indexed_action_with(keybinds, key, &|bindings, key| bindings.matches_key(key))
+}
+
+fn non_indexed_action_with(
     keybinds: &Keybinds,
     key: &TerminalKey,
-    dispatch: KeybindDispatch,
+    matches: &impl Fn(&crate::config::ActionKeybinds, &TerminalKey) -> bool,
 ) -> Option<KeybindAction> {
     for (bindings, action) in [
         (&keybinds.help, KeybindAction::Help),
@@ -190,43 +206,37 @@ pub(crate) fn resolve_non_indexed_action(
         (&keybinds.goto, KeybindAction::OpenNavigator),
         (&keybinds.maki_sessions, KeybindAction::OpenMakiSessions),
     ] {
-        if action_matches(bindings, key, dispatch) {
+        if matches(bindings, key) {
             return Some(action);
         }
     }
     None
 }
 
-pub(crate) fn resolve_custom_command(
-    keybinds: &Keybinds,
-    key: &TerminalKey,
-    dispatch: KeybindDispatch,
-) -> Option<CustomCommandKeybind> {
+fn custom_command(keybinds: &Keybinds, key: &TerminalKey) -> Option<CustomCommandKeybind> {
     keybinds
         .custom_commands
         .iter()
-        .find(|binding| match dispatch {
-            KeybindDispatch::Direct => binding.bindings.matches_direct_key(key),
-            KeybindDispatch::Prefix => binding.bindings.matches_prefix_key(key),
-        })
+        .find(|binding| binding.bindings.matches_key(key))
         .cloned()
 }
 
-pub(crate) fn resolve_indexed_action(
+fn indexed_action(keybinds: &Keybinds, key: &TerminalKey) -> Option<KeybindAction> {
+    indexed_action_with(keybinds, key, false)
+}
+
+fn indexed_action_with(
     keybinds: &Keybinds,
     key: &TerminalKey,
-    dispatch: KeybindDispatch,
+    modified_only: bool,
 ) -> Option<KeybindAction> {
     let actual_modifiers = crate::config::normalize_key_combo((key.code, key.modifiers)).1;
 
     for exact_modifiers in [true, false] {
         let trigger_matches = |binding: &crate::config::IndexedKeybind| {
-            let dispatch_matches = match dispatch {
-                KeybindDispatch::Direct => binding.trigger.is_direct(),
-                KeybindDispatch::Prefix => binding.trigger.is_prefix(),
-            };
-            let expected_modifiers = crate::config::normalize_key_combo(binding.trigger.combo()).1;
-            dispatch_matches && (actual_modifiers == expected_modifiers) == exact_modifiers
+            let expected_modifiers = crate::config::normalize_key_combo(binding.combo).1;
+            (actual_modifiers == expected_modifiers) == exact_modifiers
+                && (!modified_only || !crate::config::is_unmodified_printable(binding.combo))
         };
 
         for binding in &keybinds.switch_tab {
@@ -255,17 +265,6 @@ pub(crate) fn resolve_indexed_action(
     None
 }
 
-fn resolve_exact_binding(
-    keybinds: &Keybinds,
-    key: &TerminalKey,
-    dispatch: KeybindDispatch,
-) -> Option<KeybindMatch> {
-    resolve_non_indexed_action(keybinds, key, dispatch)
-        .map(KeybindMatch::Action)
-        .or_else(|| resolve_custom_command(keybinds, key, dispatch).map(KeybindMatch::Command))
-        .or_else(|| resolve_indexed_action(keybinds, key, dispatch).map(KeybindMatch::Action))
-}
-
 fn generated_character_key(key: &TerminalKey) -> Option<TerminalKey> {
     let mut characters = key.generated_text.as_deref()?.chars();
     let character = characters.next()?;
@@ -276,17 +275,6 @@ fn generated_character_key(key: &TerminalKey) -> Option<TerminalKey> {
         KeyCode::Char(character),
         crossterm::event::KeyModifiers::empty(),
     ))
-}
-
-fn action_matches(
-    bindings: &crate::config::ActionKeybinds,
-    key: &TerminalKey,
-    dispatch: KeybindDispatch,
-) -> bool {
-    match dispatch {
-        KeybindDispatch::Direct => bindings.matches_direct_key(key),
-        KeybindDispatch::Prefix => bindings.matches_prefix_key(key),
-    }
 }
 
 #[cfg(test)]
@@ -303,34 +291,27 @@ mod tests {
             .bindings
             .is_empty());
         let config: crate::config::Config =
-            toml::from_str("[keys]\nclear_pane = [\"super+k\", \"prefix+ctrl+k\"]").unwrap();
+            toml::from_str("[keys]\nclear_pane = [\"super+k\", \"ctrl+k\"]").unwrap();
         assert!(config.collect_diagnostics().is_empty());
         let keybinds = config.keybinds();
         assert!(matches!(
-            resolve_direct_binding(
+            resolve_binding(
                 &keybinds,
                 &TerminalKey::new(KeyCode::Char('k'), KeyModifiers::SUPER)
             ),
             Some(KeybindMatch::Action(KeybindAction::ClearPane))
         ));
         assert!(matches!(
-            resolve_prefix_binding(
+            resolve_binding(
                 &keybinds,
                 &TerminalKey::new(KeyCode::Char('k'), KeyModifiers::CONTROL)
             ),
             Some(KeybindMatch::Action(KeybindAction::ClearPane))
         ));
-        assert!(matches!(
-            resolve_prefix_binding(
-                &keybinds,
-                &TerminalKey::new(KeyCode::Char('k'), KeyModifiers::SHIFT)
-            ),
-            Some(KeybindMatch::Action(KeybindAction::SwapPaneUp))
-        ));
     }
 
     #[test]
-    fn one_shared_resolver_handles_direct_prefix_and_indexed_bindings() {
+    fn one_resolver_handles_action_command_and_indexed_bindings() {
         let keybinds = Keybinds {
             next_tab: crate::config::ActionKeybinds::direct("ctrl+n"),
             ..Keybinds::default()
@@ -338,31 +319,31 @@ mod tests {
 
         let direct = TerminalKey::new(KeyCode::Char('n'), KeyModifiers::CONTROL);
         assert!(matches!(
-            resolve_direct_binding(&keybinds, &direct),
+            resolve_binding(&keybinds, &direct),
             Some(KeybindMatch::Action(KeybindAction::NextTab))
         ));
 
         let help = TerminalKey::new(KeyCode::Char('?'), KeyModifiers::empty());
         assert!(matches!(
-            resolve_prefix_binding(&keybinds, &help),
+            resolve_binding(&keybinds, &help),
             Some(KeybindMatch::Action(KeybindAction::Help))
         ));
 
         let one = TerminalKey::new(KeyCode::Char('1'), KeyModifiers::empty());
         assert!(matches!(
-            resolve_prefix_binding(&keybinds, &one),
+            resolve_binding(&keybinds, &one),
             Some(KeybindMatch::Action(KeybindAction::SwitchTab(0)))
         ));
     }
 
     #[test]
-    fn prefix_resolution_uses_shared_generated_character_fallback() {
+    fn resolution_uses_generated_character_fallback() {
         let keybinds = Keybinds::default();
         let key = TerminalKey::new(KeyCode::Char('/'), KeyModifiers::SHIFT)
             .with_generated_text(Some("?".to_owned()));
 
         assert!(matches!(
-            resolve_prefix_binding(&keybinds, &key),
+            resolve_binding(&keybinds, &key),
             Some(KeybindMatch::Action(KeybindAction::Help))
         ));
     }

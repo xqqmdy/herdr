@@ -1992,7 +1992,7 @@ fn rapid_copy_motions_are_chained_from_the_previous_result() {
 }
 
 #[test]
-fn queued_copy_keys_preserve_prefix_order() {
+fn queued_copy_keys_preserve_fifo_order() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));
     let mut pane_surface = surface();
@@ -2011,10 +2011,9 @@ fn queued_copy_keys_preserve_prefix_order() {
     let origin = state.copy_mode.as_ref().expect("copy mode").cursor;
     let motion = state.handle_input_bytes(b"w");
     state.handle_input_bytes(b"l");
-    let (prefix_key, prefix_modifiers) = state.config.keybinds.prefix[0];
     state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
-        prefix_key,
-        prefix_modifiers,
+        KeyCode::Char('b'),
+        KeyModifiers::CONTROL,
     ))]);
     let motion_id = match &motion.actions[0] {
         ClientShellAction::Endpoint { request, .. } => request.id.clone(),

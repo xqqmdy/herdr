@@ -221,15 +221,12 @@ pub(crate) fn keybind_help_groups(
                 .find(|(g, l, _)| *g == *group && **l == **label)
                 .and_then(|(_, _, combo)| *combo)
                 .map(crate::config::format_key_combo);
-            // In NORMAL mode every prefix binding fires without the prefix,
-            // so bare action keys replace the prefix form everywhere.
-            let stripped = shortcut.replace("prefix+", "");
-            *shortcut = if stripped == "unset" {
+            *shortcut = if shortcut == "unset" {
                 over.unwrap_or_else(|| "unset".to_owned())
             } else {
                 match over.as_deref() {
-                    Some(over) if stripped != over => format!("{stripped}/{over}"),
-                    _ => stripped,
+                    Some(over) if shortcut != over => format!("{shortcut}/{over}"),
+                    _ => shortcut.clone(),
                 }
             };
         }

@@ -14,7 +14,7 @@ pub(crate) use keybind_help::{
     filter_keybind_help_groups, keybind_help_groups, keybind_help_text_char,
 };
 pub(crate) use keybindings::{
-    resolve_direct_binding, resolve_prefix_binding, resolve_vim_normal_action, KeybindAction,
+    resolve_binding, resolve_modified_binding, resolve_vim_normal_action, KeybindAction,
     KeybindMatch,
 };
 pub(crate) use lease::{InputLeaseKey, InputLeaseTable, RepeatPlan};

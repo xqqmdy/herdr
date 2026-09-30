@@ -583,8 +583,8 @@ mod tests {
 
     fn binding(action: crate::config::CustomCommandAction) -> crate::config::CustomCommandKeybind {
         crate::config::CustomCommandKeybind {
-            bindings: crate::config::ActionKeybinds::prefix("z"),
-            label: "prefix+z".into(),
+            bindings: crate::config::ActionKeybinds::direct("z"),
+            label: "z".into(),
             command: "secret-command --token hidden".into(),
             action,
             description: Some("safe description".into()),
@@ -603,8 +603,8 @@ mod tests {
         install(&mut app, binding(crate::config::CustomCommandAction::Shell));
         let manifest = app.client_shell_command_manifest();
         assert_eq!(manifest.len(), 1);
-        assert_eq!(manifest[0].binding_label, "prefix+z");
-        assert_eq!(manifest[0].binding_labels, ["prefix+z"]);
+        assert_eq!(manifest[0].binding_label, "z");
+        assert_eq!(manifest[0].binding_labels, ["z"]);
         assert_eq!(manifest[0].description.as_deref(), Some("safe description"));
         assert!(!format!("{:?}", manifest).contains("secret-command"));
         assert_eq!(

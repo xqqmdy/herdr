@@ -1,4 +1,5 @@
 use crate::config::{Keybinds, NewTerminalCwdConfig, SoundConfig, ToastConfig};
+#[cfg(test)]
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -820,7 +821,6 @@ pub struct AppState {
     /// None means unsupported or not yet reported, which preserves active-pane suppression.
     pub outer_terminal_focus: Option<bool>,
     // Config
-    pub prefix_keys: Vec<(KeyCode, KeyModifiers)>,
     /// Virtual terminal size (columns, rows) used when no client is attached.
     pub(crate) headless_size: (u16, u16),
     pub agent_panel_sort: AgentPanelSort,
@@ -1045,7 +1045,6 @@ impl AppState {
             toast: None,
             pending_agent_notifications: std::collections::HashMap::new(),
             outer_terminal_focus: None,
-            prefix_keys: vec![(KeyCode::Char('b'), KeyModifiers::CONTROL)],
             headless_size: (
                 crate::config::DEFAULT_HEADLESS_COLS,
                 crate::config::DEFAULT_HEADLESS_ROWS,

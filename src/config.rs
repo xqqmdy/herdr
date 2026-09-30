@@ -17,10 +17,10 @@ pub use self::{
         upsert_section_value,
     },
     keybinds::{
-        format_key_combo, format_key_sequence, normalize_key_combo, terminal_key_matches_combo,
-        ActionKeybinds, BindingConfig, CommandKeybindConfig, CustomCommandAction,
-        CustomCommandKeybind, IndexedKeybind, KeyCombo, Keybinds, LiveKeybindConfig, VimKeyConfig,
-        VimNormalKeys,
+        format_key_combo, format_key_sequence, is_unmodified_printable, normalize_key_combo,
+        terminal_key_matches_combo, ActionKeybinds, BindingConfig, CommandKeybindConfig,
+        CustomCommandAction, CustomCommandKeybind, IndexedKeybind, KeyCombo, Keybinds,
+        LiveKeybindConfig, VimKeyConfig, VimNormalKeys,
     },
     model::{
         validated_sidebar_bounds, AgentPanelSortConfig, Config, ConfigReloadReport,
@@ -103,20 +103,15 @@ impl Config {
             .unwrap_or(true)
     }
 
-    pub fn prefix_keys(&self) -> Vec<(KeyCode, KeyModifiers)> {
+    /// Parsed keybinds for Herdr actions.
+    pub fn keybinds(&self) -> Keybinds {
         self.validated_keybinds().1
     }
 
-    /// Parsed keybinds for Herdr actions.
-    pub fn keybinds(&self) -> Keybinds {
-        self.validated_keybinds().3
-    }
-
     pub fn collect_diagnostics(&self) -> Vec<String> {
-        let (prefix_diag, _, keybind_diags, _) = self.validated_keybinds();
-        prefix_diag
+        let (keybind_diags, _) = self.validated_keybinds();
+        keybind_diags
             .into_iter()
-            .chain(keybind_diags)
             .chain(self.remote_image_paste_key().err())
             .chain(self.vim_keys().err().into_iter().flatten())
             .chain(self.theme.diagnostics())
@@ -175,15 +170,9 @@ impl Config {
         }
     }
 
-    pub(crate) fn live_keybinds_with_diagnostics(
-        &self,
-    ) -> Result<(LiveKeybindConfig, Vec<String>), Vec<String>> {
-        let (prefix_diag, prefix, keybind_diags, keybinds) = self.validated_keybinds();
-        if let Some(prefix_diag) = prefix_diag {
-            Err(std::iter::once(prefix_diag).chain(keybind_diags).collect())
-        } else {
-            Ok((LiveKeybindConfig { prefix, keybinds }, keybind_diags))
-        }
+    pub(crate) fn live_keybinds_with_diagnostics(&self) -> (LiveKeybindConfig, Vec<String>) {
+        let (keybind_diags, keybinds) = self.validated_keybinds();
+        (LiveKeybindConfig { keybinds }, keybind_diags)
     }
 
     pub(crate) fn local_keybindings_profile_toml(&self) -> Result<String, toml::ser::Error> {
@@ -192,8 +181,7 @@ impl Config {
             keys: model::KeysConfigOverlay,
         }
 
-        let mut keys = self.keys.local_profile(&self.keybinds());
-        keys.set_prefixes(&self.prefix_keys());
+        let keys = self.keys.local_profile(&self.keybinds());
         toml::to_string_pretty(&KeysProfile { keys })
     }
 }
@@ -201,10 +189,7 @@ impl Config {
 pub(crate) fn keybindings_from_profile_toml(profile: &str) -> Result<LiveKeybindConfig, String> {
     let config = toml::from_str::<Config>(profile)
         .map_err(|err| format!("invalid keybinding profile: {err}"))?;
-    config
-        .live_keybinds_with_diagnostics()
-        .map(|(keybinds, _diagnostics)| keybinds)
-        .map_err(|diagnostics| diagnostics.join("; "))
+    Ok(config.live_keybinds_with_diagnostics().0)
 }
 
 #[cfg(test)]
@@ -216,11 +201,10 @@ mod tests {
         let config: Config = toml::from_str(
             r#"
 [keys]
-prefix = "ctrl+a"
-new_tab = "prefix+t"
+new_tab = "t"
 
 [[keys.command]]
-key = "prefix+g"
+key = "g"
 command = "lazygit"
 "#,
         )
@@ -228,20 +212,19 @@ command = "lazygit"
 
         let profile = config.local_keybindings_profile_toml().unwrap();
         assert!(profile.contains("[keys]"));
-        assert!(profile.contains("prefix = \"ctrl+a\""));
-        assert!(profile.contains("new_tab = \"prefix+t\""));
-        assert!(profile.contains("next_tab = \"prefix+n\""));
+        assert!(profile.contains("new_tab = \"t\""));
+        assert!(profile.contains("next_tab = \"n\""));
         assert!(!profile.contains("lazygit"));
         assert!(!profile.contains("command ="));
         assert!(!profile.contains("[[keys.command]]"));
     }
 
     #[test]
-    fn local_keybindings_profile_publishes_the_effective_prefix_fallback() {
+    fn local_keybindings_profile_round_trips_effective_bindings() {
         let config: Config = toml::from_str(
             r#"
 [keys]
-prefix = "ctrl+"
+next_tab = ["ctrl+n", "alt+n"]
 "#,
         )
         .unwrap();
@@ -249,43 +232,11 @@ prefix = "ctrl+"
         let profile = config.local_keybindings_profile_toml().unwrap();
         let keybinds = keybindings_from_profile_toml(&profile).unwrap();
 
-        assert!(profile.contains("prefix = \"ctrl+b\""));
-        assert_eq!(keybinds.prefix, config.prefix_keys());
-    }
-
-    #[test]
-    fn local_keybindings_profile_publishes_additional_prefixes_for_old_clients() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-prefix = ["ctrl+space", "ctrl+s"]
-"#,
-        )
-        .unwrap();
-
-        let profile = config.local_keybindings_profile_toml().unwrap();
-
-        // Generation-1 clients parse `prefix` as a single string; the extra
-        // prefixes ride in the optional `extra_prefixes` field they ignore.
-        assert!(profile.contains("prefix = \"ctrl+space\""));
-        assert!(!profile.contains("prefix = ["));
-        assert!(profile.contains("extra_prefixes = [\"ctrl+s\"]"));
-
-        let keybinds = keybindings_from_profile_toml(&profile).unwrap();
-        assert_eq!(keybinds.prefix, config.prefix_keys());
-    }
-
-    #[test]
-    fn local_keybindings_profile_omits_extra_prefixes_for_a_single_prefix() {
-        let config: Config = toml::from_str(
-            r#"
-[keys]
-prefix = "ctrl+b"
-"#,
-        )
-        .unwrap();
-        let profile = config.local_keybindings_profile_toml().unwrap();
-        assert!(!profile.contains("extra_prefixes"));
+        assert!(profile.contains("\"ctrl+n\"") && profile.contains("\"alt+n\""));
+        assert_eq!(
+            keybinds.keybinds.next_tab.labels(),
+            config.keybinds().next_tab.labels()
+        );
     }
 
     #[test]
@@ -293,7 +244,7 @@ prefix = "ctrl+b"
         let config: Config = toml::from_str(
             r#"
 [keys]
-zoom = "prefix+?"
+zoom = "?"
 "#,
         )
         .unwrap();
@@ -301,23 +252,23 @@ zoom = "prefix+?"
         let profile = config.local_keybindings_profile_toml().unwrap();
         let round_tripped: Config = toml::from_str(&profile).unwrap();
 
-        assert!(profile.contains("zoom = \"prefix+?\""));
-        assert!(!profile.contains("help = \"prefix+?\""));
+        assert!(profile.contains("zoom = \"?\""));
+        assert!(!profile.contains("help = \"?\""));
         assert!(round_tripped
             .keybinds()
             .zoom
             .bindings
             .iter()
-            .any(|binding| binding.label == "prefix+?"));
+            .any(|binding| binding.label == "?"));
         assert!(round_tripped.keybinds().help.bindings.is_empty());
     }
 
     #[test]
-    fn local_keybindings_profile_omits_default_displaced_by_user_prefix() {
+    fn local_keybindings_profile_omits_default_displaced_by_user_binding() {
         let config: Config = toml::from_str(
             r#"
 [keys]
-prefix = "n"
+new_workspace = "n"
 "#,
         )
         .unwrap();
@@ -325,8 +276,8 @@ prefix = "n"
         let profile = config.local_keybindings_profile_toml().unwrap();
         let round_tripped: Config = toml::from_str(&profile).unwrap();
 
-        assert!(profile.contains("prefix = \"n\""));
-        assert!(!profile.contains("next_tab = \"prefix+n\""));
+        assert!(profile.contains("new_workspace = \"n\""));
+        assert!(!profile.contains("next_tab = \"n\""));
         assert!(round_tripped.keybinds().next_tab.bindings.is_empty());
     }
 
@@ -351,7 +302,6 @@ tabs = "ctrl"
 
         assert!(profile.contains("[keys.indexed]"));
         assert!(profile.contains("tabs = \"ctrl\""));
-        assert!(!profile.contains("switch_tab = \"prefix+1..9\""));
         assert_eq!(switch_tab_labels.len(), 9);
         assert!(switch_tab_labels
             .iter()
@@ -373,7 +323,6 @@ tabs = "bogus"
 
         assert!(profile.contains("[keys.indexed]"));
         assert!(profile.contains("tabs = \"bogus\""));
-        assert!(!profile.contains("switch_tab = \"prefix+1..9\""));
         assert!(round_tripped.keybinds().switch_tab.is_empty());
     }
 
@@ -382,7 +331,7 @@ tabs = "bogus"
         let config: Config = toml::from_str(
             r#"
 [[keys.command]]
-key = "prefix+n"
+key = "n"
 command = "echo next"
 "#,
         )
@@ -398,37 +347,6 @@ command = "echo next"
     }
 
     #[test]
-    fn local_keybindings_profile_preserves_partially_displaced_indexed_default() {
-        let config: Config = toml::from_str(
-            r#"
-[[keys.command]]
-key = "prefix+1"
-command = "echo one"
-"#,
-        )
-        .unwrap();
-
-        let profile = config.local_keybindings_profile_toml().unwrap();
-        let round_tripped: Config = toml::from_str(&profile).unwrap();
-        let keybinds = round_tripped.keybinds();
-        let switch_tab_labels: Vec<_> = keybinds
-            .switch_tab
-            .iter()
-            .map(|binding| binding.label.as_str())
-            .collect();
-
-        assert!(!profile.contains("[[keys.command]]"));
-        assert!(!profile.contains("switch_tab = \"prefix+1..9\""));
-        assert!(profile.contains("\"prefix+2\""));
-        assert!(profile.contains("\"prefix+9\""));
-        assert!(!switch_tab_labels.contains(&"prefix+1"));
-        assert_eq!(switch_tab_labels.len(), 8);
-        assert!(switch_tab_labels
-            .iter()
-            .all(|label| label.starts_with("prefix+")));
-    }
-
-    #[test]
     fn remote_image_paste_key_defaults_to_ctrl_v() {
         let config = Config::default();
         assert_eq!(
@@ -439,80 +357,7 @@ command = "echo one"
 
     #[test]
     fn remote_image_paste_key_can_be_disabled() {
-        let config: Config = toml::from_str("[keys]\nremote_image_paste = ''\n").unwrap();
+        let config: Config = toml::from_str("[keys]\nremote_image_paste = ''").unwrap();
         assert_eq!(config.remote_image_paste_key().unwrap(), None);
-    }
-
-    #[test]
-    fn vim_keys_parse_defaults_and_overrides() {
-        let config = Config::default();
-        let vim = config.vim_keys().unwrap();
-        assert_eq!(vim.insert, (KeyCode::Char('i'), KeyModifiers::empty()));
-        assert_eq!(
-            vim.normal,
-            vec![
-                (KeyCode::Char('j'), KeyModifiers::empty()),
-                (KeyCode::Char('j'), KeyModifiers::empty())
-            ]
-        );
-        assert_eq!(
-            vim.normal_keys.previous_workspace,
-            Some((KeyCode::Char('k'), KeyModifiers::empty()))
-        );
-        assert_eq!(
-            vim.normal_keys.next_workspace,
-            Some((KeyCode::Char('j'), KeyModifiers::empty()))
-        );
-        assert_eq!(
-            vim.normal_keys.focus_left,
-            Some((KeyCode::Char('h'), KeyModifiers::CONTROL))
-        );
-        assert_eq!(
-            vim.normal_keys.split_right,
-            Some((KeyCode::Char('v'), KeyModifiers::SHIFT))
-        );
-
-        let config: Config = toml::from_str(
-            "[keys]\nvim_insert = 'a'\nvim_normal = 'ctrl+q'\n\n[keys.normal]\nsplit_down = '-'\nfocus_left = ''\n",
-        )
-        .unwrap();
-        let vim = config.vim_keys().unwrap();
-        assert_eq!(vim.insert, (KeyCode::Char('a'), KeyModifiers::empty()));
-        assert_eq!(
-            vim.normal,
-            vec![(KeyCode::Char('q'), KeyModifiers::CONTROL)]
-        );
-        assert_eq!(
-            vim.normal_keys.split_down,
-            Some((KeyCode::Char('-'), KeyModifiers::empty()))
-        );
-        assert_eq!(vim.normal_keys.focus_left, None);
-        assert_eq!(
-            vim.normal_keys.previous_tab,
-            Some((KeyCode::Char('h'), KeyModifiers::empty()))
-        );
-    }
-
-    #[test]
-    fn vim_keys_report_invalid_bindings_as_diagnostics() {
-        let config: Config = toml::from_str("[keys]\nvim_insert = 'not+a+key'\n").unwrap();
-        let err = config.vim_keys().unwrap_err();
-        assert!(err[0].contains("keys.vim_insert"));
-        assert!(config
-            .collect_diagnostics()
-            .iter()
-            .any(|diagnostic| diagnostic.contains("keys.vim_insert")));
-    }
-
-    #[test]
-    fn ui_host_cursor_defaults_to_auto_and_parses_overrides() {
-        let default_config = Config::default();
-        assert_eq!(default_config.ui.host_cursor, HostCursorModeConfig::Auto);
-
-        let native: Config = toml::from_str("[ui]\nhost_cursor = 'native'\n").unwrap();
-        assert_eq!(native.ui.host_cursor, HostCursorModeConfig::Native);
-
-        let drawn: Config = toml::from_str("[ui]\nhost_cursor = 'drawn'\n").unwrap();
-        assert_eq!(drawn.ui.host_cursor, HostCursorModeConfig::Drawn);
     }
 }

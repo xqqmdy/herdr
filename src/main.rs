@@ -132,71 +132,68 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # manifest_check = true
 
 [keys]
-# Prefix key(s), e.g. "prefix+n" bindings require one of these first. In NORMAL
-# mode the prefix key itself is forwarded to the focused pane.
-# Examples: "ctrl+b", "f12", "esc", "-"; use an array to accept several.
+# Action bindings. Bare keys fire in NORMAL mode; modified chords like
+# "ctrl+alt+n" also fire while typing in INSERT mode.
 # Accepted key syntax: plain keys, ctrl/shift/alt/cmd/super modifiers, and special keys like enter/tab/esc/left/right/up/down.
 # Named punctuation such as minus, comma, ampersand, plus, and backtick is also accepted.
-# Most reliable direct bindings are ctrl+letter, function keys, and explicit modified chords.
 # alt+..., cmd/super, and punctuation-with-modifiers may depend on your terminal/tmux setup.
-# prefix = "ctrl+b"
 
-# Prefix-mode actions
-# help = "prefix+?"
-# settings = "prefix+s"
-# detach = "prefix+q"
-# reload_config = "prefix+shift+r"
-# open_notification_target = "prefix+o"
-# goto = "prefix+g"
-# maki_sessions = "prefix+m"
-# new_workspace = "prefix+shift+n"
-# new_worktree = "prefix+shift+g"
+# Global actions
+# help = "?"
+# settings = "s"
+# detach = "q"
+# reload_config = "shift+r"
+# open_notification_target = "o"
+# goto = "g"
+# maki_sessions = "m"
+# new_workspace = "shift+n"
+# new_worktree = "shift+g"
 # open_worktree = ""    # optional, unset by default
 # remove_worktree = ""  # optional, unset by default; opens confirmation
-# rename_workspace = "prefix+shift+w"
-# close_workspace = "prefix+shift+d"
+# rename_workspace = "shift+w"
+# close_workspace = "shift+d"
 # previous_workspace = "" # optional, unset by default
 # next_workspace = ""     # optional, unset by default
 # previous_agent = ""     # optional, unset by default
 # next_agent = ""         # optional, unset by default
-# focus_agent = ""        # optional indexed binding, e.g. "prefix+alt+1..9"
+# focus_agent = ""        # optional indexed binding, e.g. "alt+1..9"
 # remote_image_paste = "ctrl+v" # only active in herdr --remote; empty disables raw-key image paste
-# new_tab = "prefix+c"
-# rename_tab = "prefix+shift+t"
-# previous_tab = "prefix+p"
-# next_tab = "prefix+n"
+# new_tab = "c"
+# rename_tab = "shift+t"
+# previous_tab = "p"
+# next_tab = "n"
 # move_tab_previous = ""   # optional, e.g. "alt+shift+left" moves the tab toward the front
 # move_tab_next = ""       # optional, e.g. "alt+shift+right" moves the tab toward the back
-# switch_tab = "prefix+1..9"
-# switch_workspace = ""   # optional indexed binding, e.g. "prefix+shift+1..9"
-# close_tab = "prefix+shift+x"
-# rename_pane = "prefix+shift+p"
-# edit_scrollback = "prefix+e"
-# clear_pane = ""                  # unbound; e.g. "prefix+ctrl+k"
-# focus_pane_left = "prefix+h"
-# focus_pane_down = "prefix+j"
-# focus_pane_up = "prefix+k"
-# focus_pane_right = "prefix+l"
-# cycle_pane_next = "prefix+tab"
-# cycle_pane_previous = "prefix+shift+tab"
-# last_pane = ""          # optional, unset by default; bind e.g. "prefix+tab" for global back-and-forth
-# split_vertical = "prefix+v"
-# split_horizontal = "prefix+minus"
-# close_pane = "prefix+x"
-# zoom = "prefix+z"       # legacy alias: fullscreen
-# resize_mode = "prefix+r"
+# switch_tab = "1..9"
+# switch_workspace = ""   # optional indexed binding, e.g. "shift+1..9"
+# close_tab = "shift+x"
+# rename_pane = "shift+p"
+# edit_scrollback = "e"
+# clear_pane = ""                  # unbound; e.g. "ctrl+k"
+# focus_pane_left = "h"
+# focus_pane_down = "j"
+# focus_pane_up = "k"
+# focus_pane_right = "l"
+# cycle_pane_next = "tab"
+# cycle_pane_previous = "shift+tab"
+# last_pane = ""          # optional, unset by default; bind e.g. "tab" for global back-and-forth
+# split_vertical = "v"
+# split_horizontal = "minus"
+# close_pane = "x"
+# zoom = "z"              # legacy alias: fullscreen
+# resize_mode = "r"
 # resize_pane_left = ""   # optional, e.g. "ctrl+shift+alt+left" resizes without entering resize mode
 # resize_pane_down = ""   # optional, e.g. "ctrl+shift+alt+down"
 # resize_pane_up = ""     # optional, e.g. "ctrl+shift+alt+up"
 # resize_pane_right = ""  # optional, e.g. "ctrl+shift+alt+right"
-# toggle_sidebar = "prefix+b"
+# toggle_sidebar = "b"
 
-# Vim-style NORMAL/INSERT mode layer. The prefix is not needed:
-# every keypress resolves through the bindings above, unmatched keys are
-# swallowed, and pane input requires INSERT mode.
+# Vim-style NORMAL/INSERT mode layer. In NORMAL mode every keypress
+# resolves through the bindings above, unmatched keys are swallowed, and
+# pane input requires INSERT mode.
 # vim_insert = "i"   # leaves NORMAL mode and types into the focused pane
 # vim_normal = "jj"  # key sequence returning from terminal input to NORMAL mode
-# [keys.normal]      # NORMAL-mode keys, resolved before the prefix bindings
+# [keys.normal]      # NORMAL-mode keys, resolved before the action bindings
 # focus_left = "ctrl+h"
 # focus_down = "ctrl+j"
 # focus_up = "ctrl+k"
@@ -223,7 +220,7 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # Popup width and height accept terminal cells or percentages such as "80%".
 # On Windows, command strings run through cmd.exe /d /c.
 # [[keys.command]]
-# key = "prefix+alt+g"
+# key = "alt+g"
 # type = "popup"
 # command = "lazygit"
 # width = "80%"

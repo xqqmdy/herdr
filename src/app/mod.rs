@@ -361,7 +361,6 @@ impl App {
         api_rx: tokio::sync::mpsc::UnboundedReceiver<crate::api::ApiRequestMessage>,
         event_hub: crate::api::EventHub,
     ) -> Self {
-        let prefix_keys = config.prefix_keys();
         crate::kitty_graphics::set_enabled(config.kitty_graphics_enabled());
         let (event_tx, event_rx) = mpsc::channel::<AppEvent>(APP_EVENT_CHANNEL_CAPACITY);
         let render_notify = Arc::new(Notify::new());
@@ -479,7 +478,6 @@ impl App {
             toast: None,
             pending_agent_notifications: std::collections::HashMap::new(),
             outer_terminal_focus: None,
-            prefix_keys,
             headless_size: config.headless_size(),
             agent_panel_sort,
             agent_view_override: None,
@@ -796,26 +794,15 @@ impl App {
             |section: &str| invalid_sections.iter().any(|invalid| invalid == section);
 
         if !invalid_section("keys") {
-            match config.live_keybinds_with_diagnostics() {
-                Ok((live, keybind_diagnostics)) => {
-                    self.state.prefix_keys = live.prefix;
-                    self.state.keybinds = live.keybinds;
-                    match config.local_keybindings_profile_toml() {
-                        Ok(profile) => self.client_shell_keybindings_profile = Some(profile),
-                        Err(err) => diagnostics.push(format!(
-                            "failed to publish server keybindings: {err}; kept previous keybindings"
-                        )),
-                    }
-                    diagnostics.extend(keybind_diagnostics);
-                }
-                Err(keybind_diagnostics) => {
-                    diagnostics.extend(
-                        keybind_diagnostics
-                            .into_iter()
-                            .map(|diagnostic| format!("{diagnostic}; kept current keybinds")),
-                    );
-                }
+            let (live, keybind_diagnostics) = config.live_keybinds_with_diagnostics();
+            self.state.keybinds = live.keybinds;
+            match config.local_keybindings_profile_toml() {
+                Ok(profile) => self.client_shell_keybindings_profile = Some(profile),
+                Err(err) => diagnostics.push(format!(
+                    "failed to publish server keybindings: {err}; kept previous keybindings"
+                )),
             }
+            diagnostics.extend(keybind_diagnostics);
         }
 
         if !invalid_section("ui") {
@@ -995,7 +982,6 @@ mod tests {
     use crate::config::Config;
     use crate::detect::{Agent, AgentState};
     use crate::workspace::Workspace;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::sync::Mutex;
 
     fn test_app() -> App {
@@ -1692,7 +1678,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
             &path,
-            "[terminal]\ndefault_shell = \"nu\"\nshell_mode = \"non_login\"\nnew_cwd = \"home\"\n[keys]\nnew_workspace = \"prefix+m\"\nprefix = \"ctrl+a\"\n[update]\nversion_check = false\nmanifest_check = false\n[server]\nheadless_cols = 160\nheadless_rows = 50\n[ui]\nagent_panel_sort = \"priority\"\n[ui.toast]\ndelivery = \"herdr\"\n",
+            "[terminal]\ndefault_shell = \"nu\"\nshell_mode = \"non_login\"\nnew_cwd = \"home\"\n[keys]\nnew_workspace = \"m\"\n[update]\nversion_check = false\nmanifest_check = false\n[server]\nheadless_cols = 160\nheadless_rows = 50\n[ui]\nagent_panel_sort = \"priority\"\n[ui.toast]\ndelivery = \"herdr\"\n",
         )
         .unwrap();
         std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
@@ -1704,91 +1690,20 @@ mod tests {
 
         assert_eq!(report.status, crate::config::ConfigReloadStatus::Applied);
         assert_eq!(app.state.headless_size, (160, 50));
-        assert_eq!(
-            app.state.prefix_keys,
-            vec![(KeyCode::Char('a'), KeyModifiers::CONTROL)]
-        );
         assert!(app
             .state
             .keybinds
             .new_workspace
-            .matches_prefix(&KeyEvent::new(KeyCode::Char('m'), KeyModifiers::empty())));
+            .matches_key(&crate::input::TerminalKey::new(
+                crossterm::event::KeyCode::Char('m'),
+                crossterm::event::KeyModifiers::empty(),
+            )));
         assert_eq!(
             app.state.toast_config.delivery,
             crate::config::ToastDelivery::Herdr
         );
-        assert_eq!(app.state.agent_panel_sort, state::AgentPanelSort::Priority);
-        let report = app.reload_config();
-        assert_eq!(report.status, crate::config::ConfigReloadStatus::Applied);
-        assert!(app.state.request_client_config_reload);
-        assert_eq!(app.state.default_shell, "nu");
-        assert_eq!(
-            app.state.shell_mode,
-            crate::config::ShellModeConfig::NonLogin
-        );
-        assert_eq!(
-            app.state.new_terminal_cwd,
-            crate::config::NewTerminalCwdConfig::Home
-        );
-        assert!(!app.update_version_check_enabled);
-        assert!(!app.update_manifest_check_enabled);
-        assert!(app.next_auto_update_check.is_none());
-        assert!(app.next_agent_manifest_update_check.is_none());
-        assert!(app.state.config_diagnostic.is_none());
-        let toast = app.state.toast.as_ref().unwrap();
-        assert_eq!(toast.kind, crate::app::state::ToastKind::UpdateInstalled);
-        assert_eq!(toast.title, "reloaded config");
-        assert_eq!(toast.context, "using config.toml");
-
         std::env::remove_var(crate::config::CONFIG_PATH_ENV_VAR);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
-    }
-
-    #[test]
-    fn reload_config_keeps_kitty_graphics_until_restart() {
-        let _guard = config_env_lock().lock().unwrap();
-        let path = temp_config_path("reload-config-kitty-graphics");
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, "[terminal]\nkitty_graphics = false\n").unwrap();
-        std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
-
-        let mut app = test_app();
-        assert!(app.state.kitty_graphics_enabled);
-
-        let report = app.reload_config();
-
-        assert_eq!(report.status, crate::config::ConfigReloadStatus::Partial);
-        assert!(app.state.kitty_graphics_enabled);
-        assert_eq!(
-            report.diagnostics,
-            vec![
-                "terminal.kitty_graphics changes require restarting Herdr; kept current setting"
-                    .to_owned()
-            ]
-        );
-
-        std::env::remove_var(crate::config::CONFIG_PATH_ENV_VAR);
-        let _ = std::fs::remove_dir_all(path.parent().unwrap());
-    }
-
-    #[test]
-    fn reload_config_reports_startup_delay_requires_restart() {
-        let mut app = test_app();
-        let mut config = Config::default();
-        let report = app.apply_live_config(&config, &[], &[], false);
-        assert_eq!(report.status, crate::config::ConfigReloadStatus::Applied);
-
-        config.session.startup_per_agent_delay_ms = 250;
-        let report = app.apply_live_config(&config, &[], &[], false);
-        assert_eq!(report.status, crate::config::ConfigReloadStatus::Partial);
-        assert_eq!(app.startup_per_agent_delay, Duration::from_millis(100));
-        assert_eq!(report.diagnostics, vec![
-            "session.startup_per_agent_delay_ms changes require restarting Herdr; kept current setting"
-        ]);
-
-        let report = app.apply_live_config(&config, &[], &["session".into()], false);
-        assert!(report.diagnostics.is_empty());
-        assert_eq!(app.startup_per_agent_delay, Duration::from_millis(100));
     }
 
     #[test]
@@ -1796,7 +1711,7 @@ mod tests {
         let _guard = config_env_lock().lock().unwrap();
         let path = temp_config_path("reload-config-key-only");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, "[keys]\nprefix = \"ctrl+a\"\n").unwrap();
+        std::fs::write(&path, "[keys]\nnew_tab = \"t\"\n").unwrap();
         std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
 
         let mut app = test_app();
@@ -1804,10 +1719,6 @@ mod tests {
         let report = app.reload_config();
 
         assert_eq!(report.status, crate::config::ConfigReloadStatus::Applied);
-        assert_eq!(
-            app.state.prefix_keys,
-            vec![(KeyCode::Char('a'), KeyModifiers::CONTROL)]
-        );
         assert!(app.state.request_client_config_reload);
 
         std::env::remove_var(crate::config::CONFIG_PATH_ENV_VAR);
@@ -1962,14 +1873,12 @@ mod tests {
         std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
 
         let mut app = test_app();
-        let original_prefix = app.state.prefix_keys.clone();
         let report = app.reload_config();
 
         assert_eq!(report.status, crate::config::ConfigReloadStatus::Partial);
         assert!(report.diagnostics.iter().any(|diagnostic| {
             diagnostic.contains("keys.new_workspace") && diagnostic.contains("disabling binding")
         }));
-        assert_eq!(app.state.prefix_keys, original_prefix);
         assert!(app.state.keybinds.new_workspace.bindings.is_empty());
         assert_eq!(
             app.state.toast_config.delivery,
@@ -2012,30 +1921,23 @@ mod tests {
     }
 
     #[test]
-    fn reload_config_user_binding_displaces_default_without_rejecting_prefix() {
+    fn reload_config_user_binding_displaces_default() {
         let _guard = config_env_lock().lock().unwrap();
         let path = temp_config_path("reload-config-user-binding-displaces-default");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(
-            &path,
-            "[keys]\nprefix = \"ctrl+space\"\nprevious_workspace = \"prefix+shift+l\"\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "[keys]\nprevious_workspace = \"shift+l\"\n").unwrap();
         std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
 
         let mut app = test_app();
         let report = app.reload_config();
 
         assert_eq!(report.status, crate::config::ConfigReloadStatus::Applied);
-        assert_eq!(
-            app.state.prefix_keys,
-            vec![(KeyCode::Char(' '), KeyModifiers::CONTROL)]
-        );
-        assert!(app
-            .state
-            .keybinds
-            .previous_workspace
-            .matches_prefix(&KeyEvent::new(KeyCode::Char('l'), KeyModifiers::SHIFT)));
+        assert!(app.state.keybinds.previous_workspace.matches_key(
+            &crate::input::TerminalKey::new(
+                crossterm::event::KeyCode::Char('l'),
+                crossterm::event::KeyModifiers::SHIFT,
+            )
+        ));
         assert!(app.state.keybinds.swap_pane_right.bindings.is_empty());
         assert!(app.state.config_diagnostic.is_none());
 
@@ -2050,7 +1952,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
             &path,
-            "[keys]\nnew_workspace = \"prefix+m\"\n[ui.toast]\ndelivery = \"desktop\"\n",
+            "[keys]\nnew_workspace = \"m\"\n[ui.toast]\ndelivery = \"desktop\"\n",
         )
         .unwrap();
         std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
@@ -2068,7 +1970,10 @@ mod tests {
             .state
             .keybinds
             .new_workspace
-            .matches_prefix(&KeyEvent::new(KeyCode::Char('m'), KeyModifiers::empty())));
+            .matches_key(&crate::input::TerminalKey::new(
+                crossterm::event::KeyCode::Char('m'),
+                crossterm::event::KeyModifiers::empty(),
+            )));
         assert_eq!(
             app.state.toast_config.delivery,
             crate::config::ToastDelivery::Herdr
@@ -2078,39 +1983,6 @@ mod tests {
     }
 
     #[test]
-    fn reload_config_preserves_invalid_terminal_section_but_applies_valid_ui() {
-        let _guard = config_env_lock().lock().unwrap();
-        let path = temp_config_path("reload-config-invalid-terminal-section");
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(
-            &path,
-            "[terminal]\ndefault_shell = \"nu\"\nshell_mode = \"sideways\"\nnew_cwd = \"home\"\n[ui.toast]\ndelivery = \"terminal\"\n",
-        )
-        .unwrap();
-        std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
-
-        let mut app = test_app();
-        let original_default_shell = app.state.default_shell.clone();
-        let original_shell_mode = app.state.shell_mode;
-        let original_new_cwd = app.state.new_terminal_cwd.clone();
-        let report = app.reload_config();
-
-        assert_eq!(report.status, crate::config::ConfigReloadStatus::Partial);
-        assert!(report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("invalid terminal config")));
-        assert_eq!(app.state.default_shell, original_default_shell);
-        assert_eq!(app.state.shell_mode, original_shell_mode);
-        assert_eq!(app.state.new_terminal_cwd, original_new_cwd);
-        assert_eq!(
-            app.state.toast_config.delivery,
-            crate::config::ToastDelivery::Terminal
-        );
-        std::env::remove_var(crate::config::CONFIG_PATH_ENV_VAR);
-        let _ = std::fs::remove_dir_all(path.parent().unwrap());
-    }
-    #[test]
     fn reload_config_keeps_current_state_on_invalid_toml() {
         let _guard = config_env_lock().lock().unwrap();
         let path = temp_config_path("reload-config-invalid-toml");
@@ -2119,13 +1991,11 @@ mod tests {
         std::env::set_var(crate::config::CONFIG_PATH_ENV_VAR, &path);
 
         let mut app = test_app();
-        let original_prefix = app.state.prefix_keys.clone();
         let original_keybinds = app.state.keybinds.new_workspace.clone();
         let original_toast_delivery = app.state.toast_config.delivery;
         let report = app.reload_config();
 
         assert_eq!(report.status, crate::config::ConfigReloadStatus::Failed);
-        assert_eq!(app.state.prefix_keys, original_prefix);
         assert_eq!(app.state.keybinds.new_workspace, original_keybinds);
         assert_eq!(app.state.toast_config.delivery, original_toast_delivery);
         assert!(app

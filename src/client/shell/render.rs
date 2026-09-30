@@ -72,10 +72,8 @@ pub(super) fn render_mode_bar(
             palette.accent
         })
         .add_modifier(Modifier::BOLD);
-    let prefix_rhs = |bindings: &crate::config::ActionKeybinds| {
-        bindings
-            .prefix_rhs_label()
-            .unwrap_or_else(|| "unset".to_owned())
+    let key_label = |bindings: &crate::config::ActionKeybinds| {
+        bindings.label().unwrap_or_else(|| "unset".to_owned())
     };
 
     let mut segments = Vec::<(String, Style)>::new();
@@ -112,7 +110,7 @@ pub(super) fn render_mode_bar(
                     (" workspace  ".to_owned(), base),
                     ("tab".to_owned(), key),
                     (" pane  ".to_owned(), base),
-                    (prefix_rhs(&keybinds.keybinds.help), key),
+                    (key_label(&keybinds.keybinds.help), key),
                     (" keybinds".to_owned(), base),
                 ]);
             }

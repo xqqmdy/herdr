@@ -198,12 +198,11 @@ fn inactive_auto_named_tab_label_does_not_stack_terminal_faint() {
 }
 
 #[test]
-fn configured_prefix_is_client_owned_and_renders_its_bar() {
+fn configured_keybinds_are_client_owned_and_render_their_bar() {
     let config = toml::from_str::<Config>(
         r#"
 [keys]
-prefix = "ctrl+a"
-detach = "prefix+d"
+detach = "d"
 "#,
     )
     .expect("configured keybinds");
@@ -227,7 +226,7 @@ detach = "prefix+d"
 }
 
 #[test]
-fn prefix_endpoint_action_uses_public_api_with_stable_ids() {
+fn endpoint_action_uses_public_api_with_stable_ids() {
     let mut config = Config::default();
     config.ui.prompt_new_tab_name = false;
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
@@ -256,22 +255,20 @@ fn remote_keybinding_sources_keep_local_commands_off_endpoints_and_apply_server_
     let local: Config = toml::from_str(
         r#"
 [keys]
-prefix = "ctrl+a"
-new_tab = "prefix+c"
+new_tab = "c"
 
 [[keys.command]]
-key = "prefix+c"
+key = "c"
 command = "local-only"
 "#,
     )
     .unwrap();
     let remote_local = ClientShellConfig::from_config(&local)
         .with_keybinding_source(ClientShellKeybindingSource::RemoteLocal);
-    assert_eq!(remote_local.keybinds.prefix[0].0, KeyCode::Char('a'));
     assert!(remote_local.keybinds.keybinds.custom_commands.is_empty());
     assert_eq!(
         remote_local.keybinds.keybinds.new_tab.label().as_deref(),
-        Some("prefix+c")
+        Some("c")
     );
 
     let mut local_state = ClientShellState::new(
@@ -283,15 +280,15 @@ command = "local-only"
         .commands
         .push(crate::protocol::ClientShellCommand {
             command_id: "cmd_loaded_endpoint".into(),
-            binding_label: "prefix+c / prefix+y".into(),
-            binding_labels: vec!["prefix+c".into(), "prefix+y".into()],
+            binding_label: "c / y".into(),
+            binding_labels: vec!["c".into(), "y".into()],
             action: crate::protocol::ClientShellCommandAction::Shell,
             description: Some("loaded endpoint command".into()),
         });
     local_state.set_snapshot(Box::new(local_projection));
     assert_eq!(
         local_state.config.keybinds.keybinds.custom_commands[0].label,
-        "prefix+y"
+        "y"
     );
     assert_eq!(
         local_state
@@ -301,7 +298,7 @@ command = "local-only"
             .new_tab
             .label()
             .as_deref(),
-        Some("prefix+c")
+        Some("c")
     );
     let mut command_outcome = ClientShellInput::default();
     local_state.record_binding(
@@ -324,8 +321,8 @@ command = "local-only"
         .commands
         .push(crate::protocol::ClientShellCommand {
             command_id: "cmd_reloaded_endpoint".into(),
-            binding_label: "prefix+c / prefix+y".into(),
-            binding_labels: vec!["prefix+c".into(), "prefix+y".into()],
+            binding_label: "c / y".into(),
+            binding_labels: vec!["c".into(), "y".into()],
             action: crate::protocol::ClientShellCommandAction::Shell,
             description: Some("loaded endpoint command".into()),
         });
@@ -340,8 +337,7 @@ command = "local-only"
     let endpoint: Config = toml::from_str(
         r#"
 [keys]
-prefix = "ctrl+x"
-new_tab = "prefix+n"
+new_tab = "n"
 "#,
     )
     .unwrap();
@@ -355,22 +351,18 @@ new_tab = "prefix+n"
         .commands
         .push(crate::protocol::ClientShellCommand {
             command_id: "cmd_remote".into(),
-            binding_label: "prefix+z".into(),
-            binding_labels: vec!["prefix+z".into()],
+            binding_label: "z".into(),
+            binding_labels: vec!["z".into()],
             action: crate::protocol::ClientShellCommandAction::Shell,
             description: Some("remote command".into()),
         });
     state.set_snapshot(Box::new(projection));
 
-    assert_eq!(state.config.keybinds.prefix[0].0, KeyCode::Char('x'));
     assert_eq!(
         state.config.keybinds.keybinds.new_tab.label().as_deref(),
-        Some("prefix+n")
+        Some("n")
     );
-    assert_eq!(
-        state.config.keybinds.keybinds.custom_commands[0].label,
-        "prefix+z"
-    );
+    assert_eq!(state.config.keybinds.keybinds.custom_commands[0].label, "z");
     assert_eq!(
         state.config.keybinds.keybinds.custom_commands[0]
             .description
@@ -387,8 +379,8 @@ new_tab = "prefix+n"
 fn custom_binding_invokes_only_the_endpoint_manifest_id() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     let binding = crate::config::CustomCommandKeybind {
-        bindings: crate::config::ActionKeybinds::prefix("z"),
-        label: "prefix+z".into(),
+        bindings: crate::config::ActionKeybinds::direct("z"),
+        label: "z".into(),
         command: "secret-command --token hidden".into(),
         action: crate::config::CustomCommandAction::Shell,
         description: None,
@@ -430,8 +422,8 @@ fn custom_binding_invokes_only_the_endpoint_manifest_id() {
 fn plugin_command_carries_client_owned_selection_coordinates() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     let binding = crate::config::CustomCommandKeybind {
-        bindings: crate::config::ActionKeybinds::prefix("p"),
-        label: "prefix+p".into(),
+        bindings: crate::config::ActionKeybinds::direct("p"),
+        label: "p".into(),
         command: "plugin.action".into(),
         action: crate::config::CustomCommandAction::PluginAction,
         description: None,
@@ -659,8 +651,8 @@ fn custom_binding_missing_from_endpoint_manifest_is_not_forwarded() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.set_snapshot(Box::new(snapshot()));
     let binding = crate::config::CustomCommandKeybind {
-        bindings: crate::config::ActionKeybinds::prefix("z"),
-        label: "prefix+z".into(),
+        bindings: crate::config::ActionKeybinds::direct("z"),
+        label: "z".into(),
         command: "secret-command".into(),
         action: crate::config::CustomCommandAction::Shell,
         description: None,
@@ -687,8 +679,8 @@ fn help_overlay_restores_released_search_scroll_and_custom_binding_behavior() {
         .commands
         .push(crate::protocol::ClientShellCommand {
             command_id: "plugin-action".into(),
-            binding_label: "prefix+z".into(),
-            binding_labels: vec!["prefix+z".into()],
+            binding_label: "z".into(),
+            binding_labels: vec!["z".into()],
             action: crate::protocol::ClientShellCommandAction::PluginAction,
             description: Some("run plugin action".into()),
         });

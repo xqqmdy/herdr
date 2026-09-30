@@ -459,7 +459,7 @@ fn pixel_host_reports_use_cells_without_target_pixel_mode_and_release_outside() 
 }
 
 #[test]
-fn shell_targets_unconsumed_input_and_keeps_prefix_local() {
+fn shell_targets_unconsumed_input_and_keeps_actions_local() {
     let config = ClientShellConfig::from_config(&Config::default());
     let mut state = ClientShellState::new(config);
     state.set_snapshot(Box::new(snapshot()));
@@ -690,10 +690,10 @@ fn vim_normal_mode_swallows_unmatched_keys_and_stays_for_actions() {
     assert!(unmatched.requests.is_empty());
     assert_eq!(state.mode, ClientShellMode::VimNormal);
 
-    let prefix_key = state.handle_raw_events(vec![RawInputEvent::Key(
+    let unbound = state.handle_raw_events(vec![RawInputEvent::Key(
         crate::input::TerminalKey::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
     )]);
-    assert!(prefix_key.requests.is_empty());
+    assert!(unbound.requests.is_empty());
     assert_eq!(state.mode, ClientShellMode::VimNormal);
 
     let detach = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
@@ -748,7 +748,7 @@ fn vim_terminal_mode_returns_to_normal_on_the_normal_key() {
 }
 
 #[test]
-fn vim_mode_keeps_prefix_table_actions_in_normal_and_forwards_the_prefix_key() {
+fn vim_mode_fires_action_bindings_in_normal_mode() {
     let config = Config::default();
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
     state.set_snapshot(Box::new(snapshot()));

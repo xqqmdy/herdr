@@ -589,7 +589,7 @@ impl ClientShellState {
                     }
                 }
                 if let Some(binding) =
-                    crate::input::resolve_direct_binding(&self.config.keybinds.keybinds, key)
+                    crate::input::resolve_modified_binding(&self.config.keybinds.keybinds, key)
                 {
                     self.record_binding(binding, outcome);
                     return None;
@@ -609,16 +609,9 @@ impl ClientShellState {
                     return None;
                 }
                 if let Some(binding) =
-                    crate::input::resolve_prefix_binding(&self.config.keybinds.keybinds, key)
+                    crate::input::resolve_binding(&self.config.keybinds.keybinds, key)
                 {
                     self.record_binding(binding, outcome);
-                    return None;
-                }
-                if let Some(binding) =
-                    crate::input::resolve_direct_binding(&self.config.keybinds.keybinds, key)
-                {
-                    self.record_binding(binding, outcome);
-                    return None;
                 }
                 None
             }
@@ -654,8 +647,7 @@ impl ClientShellState {
         let resize_bindings = &self.config.keybinds.keybinds.resize_mode;
         if key.code == KeyCode::Esc
             || key.code == KeyCode::Enter
-            || resize_bindings.matches_prefix_key(key)
-            || resize_bindings.matches_direct_key(key)
+            || resize_bindings.matches_key(key)
         {
             self.mode = self.copy_or_terminal_mode();
             outcome.repaint = true;

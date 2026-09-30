@@ -4,8 +4,8 @@ use crate::client::endpoint::{ClientEndpointId, ClientEndpointStatus};
 fn pending_popup() -> (ClientShellState, Vec<ClientShellAction>) {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     let binding = crate::config::CustomCommandKeybind {
-        bindings: crate::config::ActionKeybinds::prefix("t"),
-        label: "prefix+t".into(),
+        bindings: crate::config::ActionKeybinds::direct("t"),
+        label: "t".into(),
         command: "popup-command".into(),
         action: crate::config::CustomCommandAction::Popup,
         description: None,

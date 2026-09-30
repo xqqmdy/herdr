@@ -753,7 +753,7 @@ mod tests {
 
     #[test]
     fn upsert_top_level_bool_replaces_existing_value() {
-        let content = "onboarding = true\n[keys]\nprefix = \"ctrl+b\"\n";
+        let content = "onboarding = true\n[keys]\nzoom = \"z\"\n";
         let updated = upsert_top_level_bool(content, "onboarding", false);
         assert!(updated.contains("onboarding = false"));
         assert!(!updated.contains("onboarding = true"));
@@ -951,11 +951,11 @@ accentt = "#ffffff"
 scrollback_lines = 42
 
 [keys]
-fullscreen = "prefix+z"
-new_tabb = "prefix+t"
+fullscreen = "z"
+new_tabb = "t"
 
 [[keys.command]]
-key = "prefix+g"
+key = "g"
 command = "git status"
 descrption = "status"
 
@@ -1001,7 +1001,7 @@ claude = [["terminal_title"]]
             .zoom
             .bindings
             .iter()
-            .any(|binding| binding.label == "prefix+z"));
+            .any(|binding| binding.label == "z"));
     }
 
     #[test]
@@ -1101,7 +1101,6 @@ delivery = "system"
 name = "catppuccin"
 
 [keys]
-prefix = "ctrl+a"
 new_tab = "c"
 
 [[keys.command]]

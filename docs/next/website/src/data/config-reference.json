@@ -476,33 +476,27 @@
       "title": "Keybindings",
       "keys": [
         {
-          "key": "keys.prefix",
-          "type": "keybinding",
-          "default": "\"ctrl+b\"",
-          "description": "Prefix key(s) to enter prefix mode (e.g. \"ctrl+b\", \"f12\", \"esc\", or an array to accept several)."
-        },
-        {
           "key": "keys.help",
           "type": "keybinding",
-          "default": "\"prefix+?\"",
+          "default": "\"?\"",
           "description": "Open keybinding help."
         },
         {
           "key": "keys.settings",
           "type": "keybinding",
-          "default": "\"prefix+s\"",
+          "default": "\"s\"",
           "description": "Open settings."
         },
         {
           "key": "keys.new_workspace",
           "type": "keybinding",
-          "default": "\"prefix+shift+n\"",
+          "default": "\"shift+n\"",
           "description": "Create a new workspace."
         },
         {
           "key": "keys.new_worktree",
           "type": "keybinding",
-          "default": "\"prefix+shift+g\"",
+          "default": "\"shift+g\"",
           "description": "Create a Git worktree from the selected workspace."
         },
         {
@@ -520,43 +514,43 @@
         {
           "key": "keys.rename_workspace",
           "type": "keybinding",
-          "default": "\"prefix+shift+w\"",
+          "default": "\"shift+w\"",
           "description": "Rename the selected workspace."
         },
         {
           "key": "keys.close_workspace",
           "type": "keybinding",
-          "default": "\"prefix+shift+d\"",
+          "default": "\"shift+d\"",
           "description": "Close the selected workspace."
         },
         {
           "key": "keys.goto",
           "type": "keybinding",
-          "default": "\"prefix+g\"",
+          "default": "\"g\"",
           "description": "Open the session navigator."
         },
         {
           "key": "keys.maki_sessions",
           "type": "keybinding",
-          "default": "\"prefix+m\"",
+          "default": "\"m\"",
           "description": "Browse and resume maki sessions."
         },
         {
           "key": "keys.detach",
           "type": "keybinding",
-          "default": "\"prefix+q\"",
+          "default": "\"q\"",
           "description": "Detach the current client from its Herdr server."
         },
         {
           "key": "keys.reload_config",
           "type": "keybinding",
-          "default": "\"prefix+shift+r\"",
+          "default": "\"shift+r\"",
           "description": "Reload config.toml in the running app/server."
         },
         {
           "key": "keys.open_notification_target",
           "type": "keybinding",
-          "default": "\"prefix+o\"",
+          "default": "\"o\"",
           "description": "Focus the currently visible notification target."
         },
         {
@@ -598,25 +592,25 @@
         {
           "key": "keys.new_tab",
           "type": "keybinding",
-          "default": "\"prefix+c\"",
+          "default": "\"c\"",
           "description": "Create a new tab in the active workspace."
         },
         {
           "key": "keys.rename_tab",
           "type": "keybinding",
-          "default": "\"prefix+shift+t\"",
+          "default": "\"shift+t\"",
           "description": "Rename the active tab."
         },
         {
           "key": "keys.previous_tab",
           "type": "keybinding",
-          "default": "\"prefix+p\"",
+          "default": "\"p\"",
           "description": "Select the previous tab."
         },
         {
           "key": "keys.next_tab",
           "type": "keybinding",
-          "default": "\"prefix+n\"",
+          "default": "\"n\"",
           "description": "Select the next tab."
         },
         {
@@ -634,7 +628,7 @@
         {
           "key": "keys.switch_tab",
           "type": "keybinding",
-          "default": "\"prefix+1..9\"",
+          "default": "\"1..9\"",
           "description": "Switch to tab 1-9."
         },
         {
@@ -646,91 +640,91 @@
         {
           "key": "keys.close_tab",
           "type": "keybinding",
-          "default": "\"prefix+shift+x\"",
+          "default": "\"shift+x\"",
           "description": "Close the active tab."
         },
         {
           "key": "keys.rename_pane",
           "type": "keybinding",
-          "default": "\"prefix+shift+p\"",
+          "default": "\"shift+p\"",
           "description": "Rename the focused pane."
         },
         {
           "key": "keys.edit_scrollback",
           "type": "keybinding",
-          "default": "\"prefix+e\"",
+          "default": "\"e\"",
           "description": "Open the focused pane scrollback in $EDITOR."
         },
         {
           "key": "keys.clear_pane",
           "type": "keybinding",
           "default": "unset",
-          "description": "Clear the focused pane screen and scrollback, keeping the current cursor line and its visible soft-wrapped rows. Sends no input to the running program and does nothing on the alternate screen (for example, Vim). Unset by default; for example, clear_pane = \"prefix+ctrl+k\"."
+          "description": "Clear the focused pane screen and scrollback, keeping the current cursor line and its visible soft-wrapped rows. Sends no input to the running program and does nothing on the alternate screen (for example, Vim). Unset by default; for example, clear_pane = \"ctrl+k\"."
         },
         {
           "key": "keys.copy_mode",
           "type": "keybinding",
-          "default": "\"prefix+[\"",
+          "default": "\"[\"",
           "description": "Enter keyboard copy mode for the focused pane."
         },
         {
           "key": "keys.focus_pane_left",
           "type": "keybinding",
-          "default": "\"prefix+h\"",
+          "default": "\"h\"",
           "description": "Focus the pane to the left."
         },
         {
           "key": "keys.focus_pane_down",
           "type": "keybinding",
-          "default": "\"prefix+j\"",
+          "default": "\"j\"",
           "description": "Focus the pane below."
         },
         {
           "key": "keys.focus_pane_up",
           "type": "keybinding",
-          "default": "\"prefix+k\"",
+          "default": "\"k\"",
           "description": "Focus the pane above."
         },
         {
           "key": "keys.focus_pane_right",
           "type": "keybinding",
-          "default": "\"prefix+l\"",
+          "default": "\"l\"",
           "description": "Focus the pane to the right."
         },
         {
           "key": "keys.swap_pane_left",
           "type": "keybinding",
-          "default": "\"prefix+shift+h\"",
+          "default": "\"shift+h\"",
           "description": "Swap the focused pane with the pane to the left."
         },
         {
           "key": "keys.swap_pane_down",
           "type": "keybinding",
-          "default": "\"prefix+shift+j\"",
+          "default": "\"shift+j\"",
           "description": "Swap the focused pane with the pane below."
         },
         {
           "key": "keys.swap_pane_up",
           "type": "keybinding",
-          "default": "\"prefix+shift+k\"",
+          "default": "\"shift+k\"",
           "description": "Swap the focused pane with the pane above."
         },
         {
           "key": "keys.swap_pane_right",
           "type": "keybinding",
-          "default": "\"prefix+shift+l\"",
+          "default": "\"shift+l\"",
           "description": "Swap the focused pane with the pane to the right."
         },
         {
           "key": "keys.cycle_pane_next",
           "type": "keybinding",
-          "default": "\"prefix+tab\"",
+          "default": "\"tab\"",
           "description": "Cycle to the next pane."
         },
         {
           "key": "keys.cycle_pane_previous",
           "type": "keybinding",
-          "default": "\"prefix+shift+tab\"",
+          "default": "\"shift+tab\"",
           "description": "Cycle to the previous pane."
         },
         {
@@ -742,31 +736,31 @@
         {
           "key": "keys.split_vertical",
           "type": "keybinding",
-          "default": "\"prefix+v\"",
+          "default": "\"v\"",
           "description": "Split pane vertically (side by side)."
         },
         {
           "key": "keys.split_horizontal",
           "type": "keybinding",
-          "default": "\"prefix+minus\"",
+          "default": "\"minus\"",
           "description": "Split pane horizontally (stacked)."
         },
         {
           "key": "keys.close_pane",
           "type": "keybinding",
-          "default": "\"prefix+x\"",
+          "default": "\"x\"",
           "description": "Close the focused pane."
         },
         {
           "key": "keys.zoom",
           "type": "keybinding",
-          "default": "\"prefix+z\"",
+          "default": "\"z\"",
           "description": "Toggle zoom for the focused pane. The legacy key name `fullscreen` is accepted as an alias."
         },
         {
           "key": "keys.resize_mode",
           "type": "keybinding",
-          "default": "\"prefix+r\"",
+          "default": "\"r\"",
           "description": "Enter resize mode."
         },
         {
@@ -796,7 +790,7 @@
         {
           "key": "keys.toggle_sidebar",
           "type": "keybinding",
-          "default": "\"prefix+b\"",
+          "default": "\"b\"",
           "description": "Toggle sidebar collapse."
         },
         {

@@ -43,10 +43,9 @@ pub struct UiConfig {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct KeysConfig {
-    /// Prefix key. Default: "ctrl+b".
-    pub prefix: String,
+    pub help: BindingConfig,
     pub zoom: BindingConfig,
-    /// Prefix-mode custom command bindings.
+    /// Custom command bindings.
     pub command: Vec<CommandKeybindConfig>,
     pub(crate) user_fields: BTreeSet<&'static str>,
 }
@@ -99,7 +98,7 @@ class CollectKeysTests(unittest.TestCase):
 
         self.assertIn("onboarding", keys)
         self.assertIn("ui.sidebar_width", keys)
-        self.assertIn("keys.prefix", keys)
+        self.assertIn("keys.help", keys)
         self.assertIn("keys.zoom", keys)
 
     def test_serde_rename_wins_over_field_name(self) -> None:
@@ -246,7 +245,7 @@ class RealModelTests(unittest.TestCase):
         keys = collect_keys(model)
 
         self.assertGreater(len(keys), 100)
-        self.assertIn("keys.prefix", keys)
+        self.assertIn("keys.help", keys)
         self.assertIn("ui.sound.agents.claude", keys)
         self.assertNotIn("keys.command", keys)
 

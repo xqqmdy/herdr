@@ -134,13 +134,7 @@ impl ClientShellConfig {
             theme_name: theme_runtime.manual_name.clone(),
             theme_runtime,
             palette: crate::app::client_palette_from_config(config),
-            keybinds: config
-                .live_keybinds_with_diagnostics()
-                .map(|(keybinds, _diagnostics)| keybinds)
-                .unwrap_or_else(|_diagnostics| LiveKeybindConfig {
-                    prefix: config.prefix_keys(),
-                    keybinds: config.keybinds(),
-                }),
+            keybinds: config.live_keybinds_with_diagnostics().0,
             local_keys: config.keys.clone(),
             vim: config.vim_keys().unwrap_or_default(),
             keybinding_source: ClientShellKeybindingSource::Local,
@@ -246,10 +240,7 @@ impl ClientShellConfig {
                         })
                     })
                     .collect();
-                config
-                    .live_keybinds_with_diagnostics()
-                    .map(|(keybinds, _diagnostics)| keybinds)
-                    .map_err(|diagnostics| diagnostics.join("; "))?
+                config.live_keybinds_with_diagnostics().0
             }
         };
         if self.keybinding_source == ClientShellKeybindingSource::Endpoint {
@@ -290,21 +281,13 @@ impl ClientShellConfig {
         if !invalid_section("keys")
             && self.keybinding_source != ClientShellKeybindingSource::Endpoint
         {
-            match config.live_keybinds_with_diagnostics() {
-                Ok((mut keybinds, keybind_diagnostics)) => {
-                    self.local_keys = config.keys.clone();
-                    if self.keybinding_source == ClientShellKeybindingSource::RemoteLocal {
-                        keybinds.keybinds.custom_commands.clear();
-                    }
-                    self.keybinds = keybinds;
-                    diagnostics.extend(keybind_diagnostics);
-                }
-                Err(keybind_diagnostics) => diagnostics.extend(
-                    keybind_diagnostics
-                        .into_iter()
-                        .map(|diagnostic| format!("{diagnostic}; kept current keybinds")),
-                ),
+            let (mut keybinds, keybind_diagnostics) = config.live_keybinds_with_diagnostics();
+            self.local_keys = config.keys.clone();
+            if self.keybinding_source == ClientShellKeybindingSource::RemoteLocal {
+                keybinds.keybinds.custom_commands.clear();
             }
+            self.keybinds = keybinds;
+            diagnostics.extend(keybind_diagnostics);
         }
 
         if !invalid_section("keys") {
@@ -445,7 +428,6 @@ impl ClientShellConfig {
 
 #[cfg(test)]
 mod tests {
-    use crossterm::event::{KeyCode, KeyModifiers};
 
     use super::*;
 
@@ -458,7 +440,7 @@ mod tests {
         next.ui.agent_panel_sort = crate::config::AgentPanelSortConfig::Priority;
         next.ui.status_indicators = crate::config::StatusIndicatorStyle::Symbols;
         next.ui.sidebar.agents = toml::from_str("rows = [[{ token = 'machine', rules = [{ equals = 'Local', bold = true }] }]]\nrow_gap = 2").unwrap();
-        next.keys.prefix = crate::config::BindingConfig::one("ctrl+a");
+        next.keys.new_tab = crate::config::BindingConfig::one("Y");
 
         let diagnostics = shell.apply_live_config(&next, &[], &[]);
 
@@ -489,8 +471,8 @@ mod tests {
         );
         assert_eq!(shell.agents, previous);
         assert_eq!(
-            shell.keybinds.prefix,
-            vec![(KeyCode::Char('a'), KeyModifiers::CONTROL)]
+            shell.keybinds.keybinds.new_tab.labels(),
+            vec!["shift+y".to_string()]
         );
     }
 
@@ -522,19 +504,19 @@ mod tests {
     fn live_reload_preserves_invalid_client_owned_sections() {
         let mut initial = Config::default();
         initial.ui.sidebar_width = 29;
-        initial.keys.prefix = crate::config::BindingConfig::one("ctrl+x");
+        initial.keys.new_tab = crate::config::BindingConfig::one("Y");
         let mut shell = ClientShellConfig::from_config(&initial);
 
         let mut invalid = Config::default();
         invalid.ui.sidebar_width = 35;
-        invalid.keys.prefix = crate::config::BindingConfig::one("ctrl+a");
+        invalid.keys.new_tab = crate::config::BindingConfig::one("U");
         let invalid_sections = vec!["ui".to_owned(), "keys".to_owned()];
         shell.apply_live_config(&invalid, &[], &invalid_sections);
 
         assert_eq!(shell.sidebar_width, 29);
         assert_eq!(
-            shell.keybinds.prefix,
-            vec![(KeyCode::Char('x'), KeyModifiers::CONTROL)]
+            shell.keybinds.keybinds.new_tab.labels(),
+            vec!["shift+y".to_string()]
         );
     }
 }
