@@ -534,6 +534,7 @@ impl ClientShellState {
                 | PendingEndpointKind::IntegrationList
                 | PendingEndpointKind::IntegrationInstall
                 | PendingEndpointKind::SelectionCopy
+                | PendingEndpointKind::MakiResumeProbe { .. }
                 | PendingEndpointKind::PaneScroll { .. }
                 | PendingEndpointKind::WordSelection { .. }
                 | PendingEndpointKind::PaneLinkActivate { .. }

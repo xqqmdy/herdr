@@ -143,3 +143,149 @@ fn maki_sessions_overlay_renders_rows_and_empty_state() {
     let text = render_text(ClientShellOverlay::MakiSessions(maki_overlay(Vec::new())));
     assert!(text.contains("no maki sessions found"), "{text}");
 }
+
+fn pane_with_cwd(pane_id: &str, cwd: &str) -> ClientShellPane {
+    ClientShellPane {
+        pane_id: pane_id.into(),
+        workspace_id: "ws_1".into(),
+        tab_id: "tab_1".into(),
+        label: None,
+        cwd: Some(cwd.into()),
+        foreground_cwd: Some(cwd.into()),
+        focused: false,
+        right_click_passthrough: false,
+    }
+}
+
+fn process_info_response(
+    pane_id: &str,
+    shell_idle: bool,
+    foreground_processes: Vec<crate::api::schema::PaneProcessInfoProcess>,
+) -> crate::api::schema::ResponseResult {
+    crate::api::schema::ResponseResult::PaneProcessInfo {
+        process_info: crate::api::schema::PaneProcessInfo {
+            pane_id: pane_id.into(),
+            shell_pid: None,
+            foreground_process_group_id: None,
+            tty: None,
+            shell_idle: Some(shell_idle),
+            foreground_processes,
+        },
+    }
+}
+
+fn endpoint_request(action: ClientShellAction) -> crate::api::schema::Request {
+    let ClientShellAction::Endpoint { request, .. } = action else {
+        panic!("expected endpoint action");
+    };
+    *request
+}
+
+fn busy_process() -> crate::api::schema::PaneProcessInfoProcess {
+    crate::api::schema::PaneProcessInfoProcess {
+        pid: 42,
+        name: "vim".into(),
+        argv0: None,
+        argv: None,
+        cmdline: None,
+        cwd: None,
+    }
+}
+
+#[test]
+fn maki_sessions_enter_probes_matching_cwd_and_resumes_there() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    let mut snap = snapshot();
+    snap.panes.push(pane_with_cwd("pane_2", "/repo/maki"));
+    state.set_snapshot(Box::new(snap));
+    state.set_pane_surface(surface());
+    state.overlay = Some(ClientShellOverlay::MakiSessions(maki_overlay(vec![
+        session("abcdefgh1234", "/repo/maki"),
+    ])));
+
+    let outcome = press(&mut state, KeyCode::Enter);
+    assert!(state.overlay.is_none());
+    let [action]: [ClientShellAction; 1] = outcome.actions.try_into().expect("one action");
+    let probe = endpoint_request(action);
+    match &probe.method {
+        crate::api::schema::Method::PaneProcessInfo(params) => {
+            assert_eq!(params.pane_id.as_deref(), Some("pane_2"));
+        }
+        other => panic!("expected pane.process_info, got {other:?}"),
+    }
+
+    let (repaint, actions) = state.handle_endpoint_result(
+        "boot-1",
+        &probe.id,
+        Ok(process_info_response("pane_2", true, Vec::new())),
+    );
+    assert!(repaint);
+    let [focus, send]: [ClientShellAction; 2] = actions.try_into().expect("focus then send");
+    let focus = endpoint_request(focus);
+    let send = endpoint_request(send);
+    match focus.method {
+        crate::api::schema::Method::PaneFocus(ref params) => {
+            assert_eq!(params.pane_id, "pane_2");
+        }
+        other => panic!("expected pane.focus, got {other:?}"),
+    }
+    match send.method {
+        crate::api::schema::Method::PaneSendText(params) => {
+            assert_eq!(params.pane_id, "pane_2");
+            assert_eq!(params.text, "maki --resume abcdefgh1234\r");
+        }
+        other => panic!("expected pane.send_text, got {other:?}"),
+    }
+}
+
+#[test]
+fn maki_sessions_enter_skips_busy_panes_and_falls_back_to_focused() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    let mut snap = snapshot();
+    snap.panes.push(pane_with_cwd("pane_2", "/repo/maki"));
+    snap.panes.push(pane_with_cwd("pane_3", "/repo/maki"));
+    state.set_snapshot(Box::new(snap));
+    state.set_pane_surface(surface());
+    state.overlay = Some(ClientShellOverlay::MakiSessions(maki_overlay(vec![
+        session("abcdefgh1234", "/repo/maki"),
+    ])));
+
+    let outcome = press(&mut state, KeyCode::Enter);
+    let [action]: [ClientShellAction; 1] = outcome.actions.try_into().expect("one action");
+    let first = endpoint_request(action);
+    match &first.method {
+        crate::api::schema::Method::PaneProcessInfo(params) => {
+            assert_eq!(params.pane_id.as_deref(), Some("pane_2"));
+        }
+        other => panic!("expected pane.process_info, got {other:?}"),
+    }
+
+    let (_, actions) = state.handle_endpoint_result(
+        "boot-1",
+        &first.id,
+        Ok(process_info_response("pane_2", false, vec![busy_process()])),
+    );
+    let [action]: [ClientShellAction; 1] = actions.try_into().expect("one action");
+    let second = endpoint_request(action);
+    match &second.method {
+        crate::api::schema::Method::PaneProcessInfo(params) => {
+            assert_eq!(params.pane_id.as_deref(), Some("pane_3"));
+        }
+        other => panic!("expected pane.process_info, got {other:?}"),
+    }
+
+    let (_, actions) = state.handle_endpoint_result(
+        "boot-1",
+        &second.id,
+        Ok(process_info_response("pane_3", false, vec![busy_process()])),
+    );
+    let [send]: [ClientShellAction; 1] = actions.try_into().expect("fallback send");
+    let send = endpoint_request(send);
+    match send.method {
+        crate::api::schema::Method::PaneSendText(params) => {
+            assert_eq!(params.pane_id, "pane_1");
+            assert_eq!(params.text, "maki --resume abcdefgh1234\r");
+        }
+        other => panic!("expected pane.send_text, got {other:?}"),
+    }
+}

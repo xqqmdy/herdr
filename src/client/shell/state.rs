@@ -654,6 +654,11 @@ pub(super) enum PendingEndpointKind {
         forced: bool,
     },
     SelectionCopy,
+    MakiResumeProbe {
+        session_id: String,
+        pane_id: String,
+        remaining: Vec<String>,
+    },
     PaneScroll {
         pane_id: String,
         serial: u64,

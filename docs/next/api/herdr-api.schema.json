@@ -8278,6 +8278,13 @@
             "pane_id": {
               "type": "string"
             },
+            "shell_idle": {
+              "description": "True when the pane's shell is at its prompt with nothing running in it.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "shell_pid": {
               "format": "uint32",
               "minimum": 0,

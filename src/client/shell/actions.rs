@@ -643,6 +643,22 @@ impl ClientShellState {
                     Err(_) => (true, Vec::new()),
                 };
             }
+            PendingEndpointKind::MakiResumeProbe {
+                session_id,
+                pane_id,
+                remaining,
+            } => {
+                let idle = match result {
+                    Ok(crate::api::schema::ResponseResult::PaneProcessInfo {
+                        process_info,
+                        ..
+                    }) => super::maki_sessions::maki_probe_pane_is_idle(&process_info),
+                    _ => false,
+                };
+                let mut outcome = ClientShellInput::default();
+                self.complete_maki_resume_probe(session_id, pane_id, remaining, idle, &mut outcome);
+                return (true, outcome.actions);
+            }
             PendingEndpointKind::WordSelection {
                 pane_id,
                 absolute_row,

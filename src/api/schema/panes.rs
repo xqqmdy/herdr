@@ -501,6 +501,9 @@ pub struct PaneProcessInfo {
     pub tty: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreground_processes: Vec<PaneProcessInfoProcess>,
+    /// True when the pane's shell is at its prompt with nothing running in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_idle: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]

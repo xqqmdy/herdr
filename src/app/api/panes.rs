@@ -531,6 +531,7 @@ impl App {
             return encode_error(id, "pane_not_found", "pane not found");
         };
         let shell_pid = runtime.child_pid();
+        let shell_idle = shell_pid.map(crate::detect::pane_shell_is_idle);
         let foreground_job = shell_pid.and_then(crate::detect::foreground_job);
         let foreground_process_group_id = foreground_job.as_ref().map(|job| job.process_group_id);
         let foreground_processes = foreground_job
@@ -558,6 +559,7 @@ impl App {
                     shell_pid,
                     foreground_process_group_id,
                     tty: None,
+                    shell_idle,
                     foreground_processes,
                 },
             },
