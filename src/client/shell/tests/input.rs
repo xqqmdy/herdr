@@ -508,7 +508,11 @@ fn shell_targets_unconsumed_input_and_keeps_actions_local() {
             ..
         }] if *modifiers == KeyModifiers::ALT.bits()
     ));
-    let _ = state.handle_input_bytes(b"jj");
+    let _ = state.handle_input_bytes(b"j");
+    // Deliberate double-tap pace: slower than the rapid-repeat window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(200));
+    let _ = state.handle_input_bytes(b"j");
     assert_eq!(state.mode, ClientShellMode::VimNormal);
     let detach = state.handle_input_bytes(b"q");
     assert!(detach.detach);
@@ -729,6 +733,9 @@ fn vim_terminal_mode_returns_to_normal_on_the_normal_key() {
     assert!(back.requests.is_empty());
     assert_eq!(state.mode, ClientShellMode::Terminal);
 
+    // Deliberate double-tap pace: slower than the rapid-repeat window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(200));
     let back = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
         KeyCode::Char('j'),
         KeyModifiers::empty(),
@@ -767,6 +774,9 @@ fn vim_mode_fires_action_bindings_in_normal_mode() {
         KeyCode::Char('j'),
         KeyModifiers::empty(),
     ))]);
+    // Deliberate double-tap pace: slower than the rapid-repeat window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(200));
     let _ = state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
         KeyCode::Char('j'),
         KeyModifiers::empty(),
@@ -783,4 +793,224 @@ fn vim_mode_fires_action_bindings_in_normal_mode() {
             if matches!(request.method, crate::api::schema::Method::PaneEditScrollback(_))
     )));
     assert_eq!(state.mode, ClientShellMode::VimNormal);
+}
+
+#[test]
+fn vim_normal_chord_completes_inside_the_timeout_window() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let first = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.vim_normal_progress, 1);
+    assert!(state.vim_normal_deadline.is_some());
+    assert!(first.requests.is_empty());
+
+    // Simulate a deliberate double-tap: inside the timeout window but slower
+    // than the rapid-repeat window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(200));
+    let _ = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+    assert_eq!(state.vim_normal_progress, 0);
+    assert!(state.vim_normal_deadline.is_none());
+}
+
+#[test]
+fn vim_normal_chord_timeout_types_held_keys_and_restarts_the_window() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    state.vim_normal_deadline = Some(std::time::Instant::now());
+
+    let mut outcome = ClientShellInput::default();
+    state.tick_vim_normal(
+        std::time::Instant::now() + std::time::Duration::from_millis(1),
+        &mut outcome,
+    );
+    assert_eq!(state.vim_normal_progress, 0);
+    assert!(state.vim_normal_deadline.is_none());
+    let flushed = outcome
+        .actions
+        .iter()
+        .any(|action| matches!(
+            action,
+            ClientShellAction::Endpoint { request, .. }
+                if matches!(&request.method, crate::api::schema::Method::PaneSendText(params) if params.text == "j")
+        ));
+    assert!(flushed, "held j should be typed into the pane on timeout");
+
+    // A j landing after the expired window starts a fresh chord instead of
+    // completing the previous one, so single-key j presses never exit INSERT.
+    let _ = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.vim_normal_progress, 1);
+}
+
+#[test]
+fn vim_normal_chord_expiry_is_also_detected_on_the_next_keypress() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    state.vim_normal_deadline = Some(std::time::Instant::now());
+
+    let next = state.handle_input_bytes(b"k");
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.vim_normal_progress, 0);
+    let held_flushed = next.actions.iter().any(|action| matches!(
+        action,
+        ClientShellAction::Endpoint { request, .. }
+            if matches!(&request.method, crate::api::schema::Method::PaneSendText(params) if params.text == "j")
+    ));
+    assert!(
+        held_flushed,
+        "expired held j should be typed before the current key"
+    );
+    let forwarded = next.requests.iter().any(|message| matches!(
+        message,
+        ClientMessage::ClientShellPaneInput { events, .. }
+            if matches!(&events[..], [ClientPaneInputEvent::Key { code: crate::protocol::ClientKeyCode::Char('k'), .. }])
+    ));
+    assert!(forwarded, "the current key should still reach the pane");
+}
+
+#[test]
+fn vim_normal_rapid_repeat_passes_through_as_input() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    assert_eq!(state.vim_normal_progress, 1);
+    // Simulate a rapid repeat: the second j lands inside the repeat window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(20));
+
+    let repeat = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert_eq!(state.vim_normal_progress, 0);
+    let held_flushed = repeat.actions.iter().any(|action| matches!(
+        action,
+        ClientShellAction::Endpoint { request, .. }
+            if matches!(&request.method, crate::api::schema::Method::PaneSendText(params) if params.text == "j")
+    ));
+    assert!(
+        held_flushed,
+        "rapid repeat should flush the held j as input"
+    );
+    let passed_through = repeat.requests.iter().any(|message| matches!(
+        message,
+        ClientMessage::ClientShellPaneInput { events, .. }
+            if matches!(&events[..], [ClientPaneInputEvent::Key { code: crate::protocol::ClientKeyCode::Char('j'), .. }])
+    ));
+    assert!(passed_through, "rapid repeat j should reach the pane");
+}
+
+#[test]
+fn vim_normal_repeat_stream_passes_following_keys_immediately() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    // First j is held, a rapid second j enters the sticky repeat stream.
+    let _ = state.handle_input_bytes(b"j");
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(20));
+    let _ = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert!(state.vim_normal_repeat_last.is_some());
+
+    // While the stream is live, subsequent j presses must not be held again,
+    // so held-key scrolling stays as smooth as non-chord keys.
+    let third = state.handle_input_bytes(b"j");
+    assert_eq!(state.vim_normal_progress, 0);
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    let passed_through = third.requests.iter().any(|message| matches!(
+        message,
+        ClientMessage::ClientShellPaneInput { events, .. }
+            if matches!(&events[..], [ClientPaneInputEvent::Key { code: crate::protocol::ClientKeyCode::Char('j'), .. }])
+    ));
+    assert!(
+        passed_through,
+        "in-stream j should reach the pane immediately"
+    );
+
+    // A non-chord key retires the stream.
+    let _ = state.handle_input_bytes(b"k");
+    assert!(state.vim_normal_repeat_last.is_none());
+}
+
+#[test]
+fn vim_normal_repeat_stream_expires_after_the_repeat_window() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(20));
+    let _ = state.handle_input_bytes(b"j");
+    assert!(state.vim_normal_repeat_last.is_some());
+
+    let mut outcome = ClientShellInput::default();
+    state.tick_vim_normal(
+        std::time::Instant::now() + std::time::Duration::from_millis(100),
+        &mut outcome,
+    );
+    assert!(state.vim_normal_repeat_last.is_none());
+}
+
+#[test]
+fn vim_normal_deliberate_double_tap_still_exits_insert() {
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    // Slower than the repeat window, faster than the timeout window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(200));
+
+    let _ = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+}
+
+#[test]
+fn vim_normal_repeat_zero_always_advances_the_chord() {
+    let mut config = Config::default();
+    config.keys.vim_normal_repeat_ms = 0;
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    state.vim_normal_chord_start = Some(std::time::Instant::now());
+
+    let _ = state.handle_input_bytes(b"j");
+    assert_eq!(state.mode, ClientShellMode::VimNormal);
+}
+
+#[test]
+fn vim_normal_timeout_zero_holds_until_the_next_keypress() {
+    let mut config = Config::default();
+    config.keys.vim_normal_timeout_ms = 0;
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    state.mode = ClientShellMode::Terminal;
+
+    let _ = state.handle_input_bytes(b"j");
+    assert!(state.vim_normal_deadline.is_none());
+
+    let mut outcome = ClientShellInput::default();
+    state.tick_vim_normal(
+        std::time::Instant::now() + std::time::Duration::from_secs(10),
+        &mut outcome,
+    );
+    assert!(outcome.actions.is_empty());
+    assert_eq!(state.vim_normal_progress, 1);
 }

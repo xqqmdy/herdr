@@ -903,6 +903,16 @@ pub(crate) struct ClientShellState {
     pub(super) mode: ClientShellMode,
     /// How far the typed vim-normal chord in terminal mode has matched.
     pub(super) vim_normal_progress: usize,
+    /// When the partially typed vim-normal chord expires and the held
+    /// characters are flushed into the focused pane.
+    pub(super) vim_normal_deadline: Option<std::time::Instant>,
+    /// When the last vim-normal chord key was pressed, used to detect
+    /// rapid-repeat input inside the repeat window.
+    pub(super) vim_normal_chord_start: Option<std::time::Instant>,
+    /// When a chord key last passed straight through as rapid-repeat input.
+    /// While chord keys keep arriving within the repeat window of this
+    /// instant they keep passing through (sticky repeat stream).
+    pub(super) vim_normal_repeat_last: Option<std::time::Instant>,
     pub(super) navigate_workspace_id: Option<WorkspaceNavigationTarget>,
     pub(super) pending_workspace_highlight: Option<PendingWorkspaceHighlight>,
     pub(super) reveal_navigation_workspace: bool,
@@ -1083,6 +1093,9 @@ impl ClientShellState {
             mode: ClientShellMode::Terminal,
             navigate_workspace_id: None,
             vim_normal_progress: 0,
+            vim_normal_deadline: None,
+            vim_normal_chord_start: None,
+            vim_normal_repeat_last: None,
             pending_workspace_highlight: None,
             reveal_navigation_workspace: false,
             overlay,
@@ -1892,6 +1905,7 @@ impl ClientShellState {
         self.selection_autoscroll_deadline
             .into_iter()
             .chain(self.selection_repaint_deadline)
+            .chain(self.vim_normal_deadline)
             .min()
             .map(|deadline| deadline.saturating_duration_since(now).min(default))
             .unwrap_or(default)

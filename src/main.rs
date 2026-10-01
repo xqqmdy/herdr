@@ -193,6 +193,8 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # pane input requires INSERT mode.
 # vim_insert = "i"   # leaves NORMAL mode and types into the focused pane
 # vim_normal = "jj"  # key sequence returning from terminal input to NORMAL mode
+# vim_normal_timeout_ms = 200  # mid-chord pause (ms) before held keys are typed into the pane; 0 waits for the next key
+# vim_normal_repeat_ms = 50  # chord keys arriving this soon (ms) after the previous one are passed through as input (key repeat, fast scrolling); 0 disables
 # [keys.normal]      # NORMAL-mode keys, resolved before the action bindings
 # focus_left = "ctrl+h"
 # focus_down = "ctrl+j"

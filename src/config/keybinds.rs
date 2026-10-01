@@ -39,6 +39,14 @@ pub struct VimNormalKeys {
 pub struct VimKeyConfig {
     pub insert: KeyCombo,
     pub normal: Vec<KeyCombo>,
+    /// How long a partially typed `normal` chord may pause before the held
+    /// characters are flushed into the pane and the chord restarts. A zero
+    /// duration holds until the next keypress.
+    pub normal_timeout: std::time::Duration,
+    /// Rapid-repeat window: chord keys arriving this soon after the previous
+    /// one are passed through as repeated input instead of advancing the
+    /// chord. A zero duration disables pass-through.
+    pub normal_repeat: std::time::Duration,
     pub normal_keys: VimNormalKeys,
 }
 
@@ -47,6 +55,16 @@ pub(crate) const DEFAULT_VIM_NORMAL: [KeyCombo; 2] = [
     (KeyCode::Char('j'), KeyModifiers::empty()),
     (KeyCode::Char('j'), KeyModifiers::empty()),
 ];
+pub const DEFAULT_VIM_NORMAL_TIMEOUT_MS: u64 = 200;
+/// Default rapid-repeat window for `keys.vim_normal_repeat_ms`: chord keys
+/// arriving this soon after the previous one are passed through as input.
+pub const DEFAULT_VIM_NORMAL_REPEAT_MS: u64 = 50;
+/// Upper bound for `keys.vim_normal_timeout_ms`; larger values are clamped so
+/// a typo cannot hold typed characters indefinitely.
+pub(crate) const MAX_VIM_NORMAL_TIMEOUT_MS: u64 = 10_000;
+/// Upper bound for `keys.vim_normal_repeat_ms`; the repeat window must stay
+/// far below a deliberate human double-tap.
+pub(crate) const MAX_VIM_NORMAL_REPEAT_MS: u64 = 500;
 
 /// One key combo, or a typed character sequence like `jj` for chord exits.
 fn parse_key_sequence(
@@ -78,6 +96,8 @@ impl Default for VimKeyConfig {
         Self {
             insert: DEFAULT_VIM_INSERT,
             normal: DEFAULT_VIM_NORMAL.to_vec(),
+            normal_timeout: std::time::Duration::from_millis(DEFAULT_VIM_NORMAL_TIMEOUT_MS),
+            normal_repeat: std::time::Duration::from_millis(DEFAULT_VIM_NORMAL_REPEAT_MS),
             normal_keys: VimNormalKeys::default(),
         }
     }
@@ -140,6 +160,12 @@ impl VimKeyConfig {
             Self {
                 insert,
                 normal,
+                normal_timeout: std::time::Duration::from_millis(
+                    keys.vim_normal_timeout_ms.min(MAX_VIM_NORMAL_TIMEOUT_MS),
+                ),
+                normal_repeat: std::time::Duration::from_millis(
+                    keys.vim_normal_repeat_ms.min(MAX_VIM_NORMAL_REPEAT_MS),
+                ),
                 normal_keys,
             },
             diagnostics,

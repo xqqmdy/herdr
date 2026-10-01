@@ -6,7 +6,8 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use super::{
     ActionKeybinds, BindingConfig, CommandKeybindConfig, IndexedKeybind, Keybinds, SidebarConfig,
     SoundConfig, TabBarRightEntryConfig, ThemeConfig, DEFAULT_MOBILE_WIDTH_THRESHOLD,
-    DEFAULT_MOUSE_SCROLL_LINES, DEFAULT_SCROLLBACK_LIMIT_BYTES,
+    DEFAULT_MOUSE_SCROLL_LINES, DEFAULT_SCROLLBACK_LIMIT_BYTES, DEFAULT_VIM_NORMAL_REPEAT_MS,
+    DEFAULT_VIM_NORMAL_TIMEOUT_MS,
 };
 
 pub const MAX_TOAST_DELAY_SECONDS: u64 = 3600;
@@ -453,6 +454,17 @@ pub struct KeysConfig {
     /// Key sequence that returns from terminal input to NORMAL mode. A single
     /// key like "esc" or a typed chord like "jj". Default: "jj".
     pub vim_normal: String,
+    /// How long a typed `vim_normal` chord may pause mid-sequence before the
+    /// held characters are typed into the focused pane and the chord restarts.
+    /// Only applies to multi-key sequences. Default: 200. Set 0 to hold until
+    /// the next keypress.
+    pub vim_normal_timeout_ms: u64,
+    /// Rapid-repeat window: when the next chord key arrives this soon (ms)
+    /// after the previous one, it is treated as repeated input and passed
+    /// through to the pane instead of advancing the chord. Lets apps driven
+    /// by single `j` presses (lazygit, pagers) keep scrolling. Default: 50.
+    /// Set 0 to disable and always advance the chord.
+    pub vim_normal_repeat_ms: u64,
     /// NORMAL-mode action keys layered over the action binding table.
     pub normal: VimNormalKeysConfig,
     /// Optional indexed shortcuts expanded over number keys 1-9.
@@ -645,6 +657,10 @@ pub(crate) struct KeysConfigOverlay {
     #[serde(skip_serializing_if = "Option::is_none")]
     vim_normal: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    vim_normal_timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vim_normal_repeat_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     normal: Option<VimNormalKeysConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     indexed: Option<IndexedKeysConfig>,
@@ -724,6 +740,8 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(toggle_sidebar);
         apply_field!(vim_insert);
         apply_field!(vim_normal);
+        apply_field!(vim_normal_timeout_ms);
+        apply_field!(vim_normal_repeat_ms);
         apply_field!(normal);
         apply_field!(indexed);
         apply_field!(command);
@@ -1177,6 +1195,8 @@ impl Default for KeysConfig {
             toggle_sidebar: BindingConfig::one("b"),
             vim_insert: "i".into(),
             vim_normal: "jj".into(),
+            vim_normal_timeout_ms: DEFAULT_VIM_NORMAL_TIMEOUT_MS,
+            vim_normal_repeat_ms: DEFAULT_VIM_NORMAL_REPEAT_MS,
             normal: VimNormalKeysConfig::default(),
             indexed: IndexedKeysConfig::default(),
             command: Vec::new(),

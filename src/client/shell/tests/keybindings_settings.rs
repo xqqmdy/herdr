@@ -218,7 +218,11 @@ detach = "d"
         "ctrl-b should reach the pane in INSERT mode"
     );
 
-    let _ = state.handle_input_bytes(b"jj");
+    let _ = state.handle_input_bytes(b"j");
+    // Deliberate double-tap pace: slower than the rapid-repeat window.
+    state.vim_normal_chord_start =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(200));
+    let _ = state.handle_input_bytes(b"j");
     assert_eq!(state.mode, ClientShellMode::VimNormal);
     let detach = state.handle_input_bytes(b"d");
     assert!(detach.detach);

@@ -20,7 +20,8 @@ pub use self::{
         format_key_combo, format_key_sequence, is_unmodified_printable, normalize_key_combo,
         terminal_key_matches_combo, ActionKeybinds, BindingConfig, CommandKeybindConfig,
         CustomCommandAction, CustomCommandKeybind, IndexedKeybind, KeyCombo, Keybinds,
-        LiveKeybindConfig, VimKeyConfig, VimNormalKeys,
+        LiveKeybindConfig, VimKeyConfig, VimNormalKeys, DEFAULT_VIM_NORMAL_REPEAT_MS,
+        DEFAULT_VIM_NORMAL_TIMEOUT_MS,
     },
     model::{
         validated_sidebar_bounds, AgentPanelSortConfig, Config, ConfigReloadReport,

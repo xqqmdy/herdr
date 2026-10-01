@@ -490,6 +490,7 @@ impl ClientShellState {
         key: &crate::input::TerminalKey,
         outcome: &mut ClientShellInput,
     ) -> Option<ClientInputTarget> {
+        let now = std::time::Instant::now();
         if self.handle_modal_paste_shortcut_with(key, outcome, crate::platform::read_clipboard_text)
         {
             return None;
@@ -548,43 +549,87 @@ impl ClientShellState {
 
         if self.mode != ClientShellMode::Terminal {
             self.vim_normal_progress = 0;
+            self.vim_normal_deadline = None;
+            self.vim_normal_chord_start = None;
+            self.vim_normal_repeat_last = None;
         }
 
         match self.mode {
             ClientShellMode::Terminal => {
                 if !self.config.vim.normal.is_empty() {
-                    let chord = &self.config.vim.normal;
-                    let index = self.vim_normal_progress.min(chord.len() - 1);
-                    if crate::config::terminal_key_matches_combo(key, chord[index]) {
-                        self.vim_normal_progress += 1;
-                        if self.vim_normal_progress == chord.len() {
-                            self.vim_normal_progress = 0;
-                            self.mode = ClientShellMode::VimNormal;
+                    let chord_first = self.config.vim.normal[0];
+                    let chord_len = self.config.vim.normal.len();
+                    let mut skip_chord = false;
+                    if self.vim_normal_repeat_last.is_some_and(|last| {
+                        self.config.vim.normal_repeat > std::time::Duration::ZERO
+                            && now.saturating_duration_since(last) <= self.config.vim.normal_repeat
+                    }) {
+                        // Sticky repeat stream: a rapid repeat was already
+                        // passed through, so keep passing chord keys straight
+                        // to the pane while they keep arriving quickly. This
+                        // keeps held-key scrolling as smooth as non-chord keys.
+                        if self.vim_normal_progress > 0 {
+                            self.flush_vim_normal_held(outcome);
                         }
-                        outcome.repaint = true;
-                        return None;
+                        if crate::config::terminal_key_matches_combo(key, chord_first) {
+                            self.vim_normal_repeat_last = Some(now);
+                            skip_chord = true;
+                        } else {
+                            self.vim_normal_repeat_last = None;
+                        }
+                    } else {
+                        self.vim_normal_repeat_last = None;
                     }
-                    if self.vim_normal_progress > 0 {
-                        // Chord broken: type the held characters into the pane,
-                        // then keep processing the current key as terminal input.
-                        let held: String = chord[..self.vim_normal_progress]
-                            .iter()
-                            .filter_map(|(code, _)| match code {
-                                KeyCode::Char(c) => Some(*c),
-                                _ => None,
-                            })
-                            .collect();
-                        self.vim_normal_progress = 0;
-                        if let Some(pane_id) = self.focused_pane_id() {
-                            self.push_endpoint_method(
-                                crate::api::schema::Method::PaneSendText(
-                                    crate::api::schema::PaneSendTextParams {
-                                        pane_id,
-                                        text: held,
-                                    },
-                                ),
-                                outcome,
-                            );
+                    if !skip_chord && self.vim_normal_progress > 0 {
+                        let since_start = self
+                            .vim_normal_chord_start
+                            .map(|start| now.saturating_duration_since(start));
+                        if chord_len > 1
+                            && self.config.vim.normal_repeat > std::time::Duration::ZERO
+                            && since_start
+                                .is_some_and(|elapsed| elapsed <= self.config.vim.normal_repeat)
+                        {
+                            // Rapid repeat (key autorepeat, fast scrolling in
+                            // lazygit and similar apps): treat the held
+                            // characters and this key as typed input, pass the
+                            // key through instead of advancing the chord, and
+                            // enter the sticky repeat stream.
+                            self.flush_vim_normal_held(outcome);
+                            self.vim_normal_repeat_last = Some(now);
+                            skip_chord = true;
+                        } else if self
+                            .vim_normal_deadline
+                            .is_some_and(|deadline| now >= deadline)
+                        {
+                            // Chord window expired: type the held characters
+                            // into the pane and restart matching on this key.
+                            self.flush_vim_normal_held(outcome);
+                        }
+                    }
+                    if !skip_chord {
+                        let chord = &self.config.vim.normal;
+                        let index = self.vim_normal_progress.min(chord.len() - 1);
+                        if crate::config::terminal_key_matches_combo(key, chord[index]) {
+                            if self.vim_normal_progress == 0 {
+                                self.vim_normal_chord_start = Some(now);
+                            }
+                            self.vim_normal_progress += 1;
+                            if self.vim_normal_progress == chord.len() {
+                                self.vim_normal_progress = 0;
+                                self.vim_normal_deadline = None;
+                                self.vim_normal_chord_start = None;
+                                self.vim_normal_repeat_last = None;
+                                self.mode = ClientShellMode::VimNormal;
+                            } else {
+                                self.vim_normal_deadline = self.vim_normal_chord_deadline(now);
+                            }
+                            outcome.repaint = true;
+                            return None;
+                        }
+                        if self.vim_normal_progress > 0 {
+                            // Chord broken: type the held characters into the pane,
+                            // then keep processing the current key as terminal input.
+                            self.flush_vim_normal_held(outcome);
                         }
                     }
                 }
@@ -626,6 +671,65 @@ impl ClientShellState {
                 self.route_copy_mode_key(key, outcome);
                 None
             }
+        }
+    }
+
+    /// Deadline after which a partially typed vim-normal chord expires, or
+    /// `None` to hold the held characters until the next keypress.
+    fn vim_normal_chord_deadline(&self, now: std::time::Instant) -> Option<std::time::Instant> {
+        (self.config.vim.normal_timeout > std::time::Duration::ZERO)
+            .then(|| now + self.config.vim.normal_timeout)
+    }
+
+    /// Type the held vim-normal chord characters into the focused pane and
+    /// reset chord matching. Used both when the chord is broken and when its
+    /// timeout window expires.
+    fn flush_vim_normal_held(&mut self, outcome: &mut ClientShellInput) {
+        if self.vim_normal_progress == 0 {
+            self.vim_normal_deadline = None;
+            return;
+        }
+        let held: String = self.config.vim.normal[..self.vim_normal_progress]
+            .iter()
+            .filter_map(|(code, _)| match code {
+                KeyCode::Char(c) => Some(*c),
+                _ => None,
+            })
+            .collect();
+        self.vim_normal_progress = 0;
+        self.vim_normal_deadline = None;
+        self.vim_normal_chord_start = None;
+        if let Some(pane_id) = self.focused_pane_id().filter(|_| !held.is_empty()) {
+            self.push_endpoint_method(
+                crate::api::schema::Method::PaneSendText(crate::api::schema::PaneSendTextParams {
+                    pane_id,
+                    text: held,
+                }),
+                outcome,
+            );
+        }
+    }
+
+    /// Flush a timed-out vim-normal chord so a lone held character (for
+    /// example a single `j` in a pager) still reaches the pane, and retire an
+    /// expired sticky repeat stream.
+    pub(crate) fn tick_vim_normal(
+        &mut self,
+        now: std::time::Instant,
+        outcome: &mut ClientShellInput,
+    ) {
+        if self.mode == ClientShellMode::Terminal
+            && self
+                .vim_normal_deadline
+                .is_some_and(|deadline| now >= deadline)
+        {
+            self.flush_vim_normal_held(outcome);
+        }
+        if self
+            .vim_normal_repeat_last
+            .is_some_and(|last| now.saturating_duration_since(last) > self.config.vim.normal_repeat)
+        {
+            self.vim_normal_repeat_last = None;
         }
     }
 
