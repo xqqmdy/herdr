@@ -36,7 +36,6 @@ pub(super) fn render_mode_bar(
     endpoint_error: Option<&str>,
     update_available: bool,
     keybinds: &LiveKeybindConfig,
-    vim: &crate::config::VimKeyConfig,
     palette: &Palette,
 ) -> Option<Rect> {
     let passthrough_chip = mode == ClientShellMode::Terminal;
@@ -83,24 +82,11 @@ pub(super) fn render_mode_bar(
             (format!(" {error}"), base),
         ]);
     } else if mode == ClientShellMode::Terminal {
-        segments.extend([
-            (" INSERT ".to_owned(), mode_style),
-            (" ".to_owned(), base),
-            (crate::config::format_key_sequence(&vim.normal), key),
-            (" normal".to_owned(), base),
-        ]);
+        segments.extend([(" INSERT ".to_owned(), mode_style)]);
     } else {
         match mode {
             ClientShellMode::VimNormal => {
-                segments.extend([
-                    (" NORMAL ".to_owned(), mode_style),
-                    (" ".to_owned(), base),
-                    (crate::config::format_key_combo(vim.insert), key),
-                    (" insert".to_owned(), base),
-                    ("  ".to_owned(), base),
-                    (crate::config::format_key_sequence(&vim.normal), key),
-                    (" normal".to_owned(), base),
-                ]);
+                segments.extend([(" NORMAL ".to_owned(), mode_style)]);
             }
             ClientShellMode::Navigate => {
                 segments.extend([
