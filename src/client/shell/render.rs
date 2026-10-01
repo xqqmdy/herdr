@@ -60,16 +60,18 @@ pub(super) fn render_mode_bar(
         .fg(palette.accent)
         .bg(palette.panel_bg)
         .add_modifier(Modifier::BOLD);
+    let mode_chip_bg = match mode {
+        ClientShellMode::Resize => palette.mauve,
+        ClientShellMode::VimNormal => palette.green,
+        ClientShellMode::Terminal => palette.peach,
+        _ => palette.accent,
+    };
     let mode_style = Style::default()
         .fg(match palette.panel_bg {
             ratatui::style::Color::Reset => palette.surface_dim,
             color => color,
         })
-        .bg(if mode == ClientShellMode::Resize {
-            palette.mauve
-        } else {
-            palette.accent
-        })
+        .bg(mode_chip_bg)
         .add_modifier(Modifier::BOLD);
     let key_label = |bindings: &crate::config::ActionKeybinds| {
         bindings.label().unwrap_or_else(|| "unset".to_owned())
