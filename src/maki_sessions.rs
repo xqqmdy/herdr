@@ -1,5 +1,7 @@
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
@@ -8,6 +10,7 @@ const SESSION_EXTENSIONS: [&str; 2] = ["jsonl", "json"];
 const ARCHIVE_DIR: &str = "archive";
 const LOCKS_DIR: &str = "locks";
 const CWD_LATEST_FILE: &str = "cwd_latest.json";
+const MAKI_CLI_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MakiSession {
@@ -35,9 +38,82 @@ struct MetaRecord {
     updated_at: Option<u64>,
 }
 
+/// Sessions as printed by `maki session list --json --global`.
+#[derive(Deserialize)]
+struct CliSessionSummary {
+    id: String,
+    title: String,
+    cwd: String,
+    updated_at: u64,
+}
+
 /// Locate candidate maki data roots, most specific first. Each candidate hosts a
 /// `sessions` directory; the first existing one wins.
 pub fn scan() -> Vec<MakiSession> {
+    match list_via_cli() {
+        Ok(sessions) => sessions,
+        Err(_) => scan_from_disk(),
+    }
+}
+
+/// The maki CLI owns the session log format, so it is the preferred data
+/// source. The disk scan below stays as the fallback for maki versions without
+/// `session list --json`.
+fn list_via_cli() -> Result<Vec<MakiSession>, String> {
+    let output = run_maki(&["session", "list", "--json", "--global"])?;
+    if !output.status.success() {
+        return Err(format!(
+            "maki session list exited with {}",
+            output.status.code().unwrap_or(-1)
+        ));
+    }
+    parse_cli_sessions(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_cli_sessions(stdout: &str) -> Result<Vec<MakiSession>, String> {
+    let summaries: Vec<CliSessionSummary> =
+        serde_json::from_str(stdout.trim()).map_err(|err| err.to_string())?;
+    Ok(summaries
+        .into_iter()
+        .filter(|summary| !summary.id.is_empty())
+        .map(|summary| MakiSession {
+            title: normalize_title(&summary.title),
+            cwd: summary.cwd,
+            updated_at: summary.updated_at,
+            id: summary.id,
+            model: String::new(),
+            created_at: 0,
+        })
+        .collect())
+}
+
+fn run_maki(args: &[&str]) -> Result<std::process::Output, String> {
+    let mut child = Command::new("maki")
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|err| format!("failed to start maki: {err}"))?;
+    let deadline = Instant::now() + MAKI_CLI_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child
+                    .wait_with_output()
+                    .map_err(|err| format!("failed to collect maki output: {err}"));
+            }
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            Ok(None) => {
+                let _ = child.kill();
+                return Err("maki command timed out".into());
+            }
+            Err(err) => return Err(format!("failed to wait for maki: {err}")),
+        }
+    }
+}
+
+fn scan_from_disk() -> Vec<MakiSession> {
     maki_sessions_dirs()
         .into_iter()
         .find(|dir| dir.is_dir())
@@ -45,14 +121,34 @@ pub fn scan() -> Vec<MakiSession> {
         .unwrap_or_default()
 }
 
-/// Delete a session, mirroring maki's best-effort cleanup. Only the main log
-/// file's removal is load-bearing; archive dirs, lock files, and the
-/// `cwd_latest.json` mapping are removed opportunistically.
+/// Delete a session through maki's own CLI, which refuses to unlink a log a
+/// running maki still appends to. The disk fallback only covers maki versions
+/// without the `session delete` command; a CLI that ran and refused is never
+/// overridden, because falling through would unlink the file it protects.
 pub fn delete(id: &str) -> Result<(), String> {
-    let Some(dir) = maki_sessions_dirs().into_iter().find(|dir| dir.is_dir()) else {
-        return Err(format!("no maki sessions directory for session {id}"));
-    };
-    delete_in(&dir, id)
+    match run_maki(&["session", "delete", id, "--force"]) {
+        Ok(output) if output.status.success() => Ok(()),
+        Ok(output) => {
+            let message = String::from_utf8_lossy(&output.stderr);
+            let message = message.trim();
+            Err(if message.is_empty() {
+                format!(
+                    "maki session delete exited with {}",
+                    output.status.code().unwrap_or(-1)
+                )
+            } else {
+                message.to_owned()
+            })
+        }
+        Err(err) => {
+            let Some(dir) = maki_sessions_dirs().into_iter().find(|dir| dir.is_dir()) else {
+                return Err(format!(
+                    "no maki sessions directory for session {id}: {err}"
+                ));
+            };
+            delete_in(&dir, id)
+        }
+    }
 }
 
 pub fn now_unix() -> u64 {
@@ -345,6 +441,26 @@ mod tests {
         let err = delete_in(dir.path(), "aaa").unwrap_err();
 
         assert!(err.contains("failed to remove"));
+    }
+
+    #[test]
+    fn parse_cli_sessions_reads_maki_json_list() {
+        let stdout = concat!(
+            r#"[{"id":"aaa","title":"fix  the\r thing","cwd":"/tmp/x","updated_at":300},"#,
+            r#"{"id":"","title":"dropped","cwd":"/tmp","updated_at":400},"#,
+            r#"{"id":"bbb","title":"","cwd":"/tmp/y","updated_at":200}]"#,
+            "\n"
+        );
+
+        let sessions = parse_cli_sessions(stdout).unwrap();
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].id, "aaa");
+        assert_eq!(sessions[0].title, "fix the thing");
+        assert_eq!(sessions[0].cwd, "/tmp/x");
+        assert_eq!(sessions[0].updated_at, 300);
+        assert_eq!(sessions[1].title, "New session");
+        assert!(parse_cli_sessions("not json").is_err());
     }
 
     #[test]

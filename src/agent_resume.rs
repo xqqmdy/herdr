@@ -224,6 +224,9 @@ pub fn plan(source: &str, agent: &str, session_ref: &AgentSessionRef) -> Option<
         ("herdr:kimi", "kimi", AgentSessionRefKind::Id) => {
             vec!["kimi".into(), "--session".into(), session_ref.value.clone()]
         }
+        ("herdr:maki", "maki", AgentSessionRefKind::Id) => {
+            vec!["maki".into(), "--resume".into(), session_ref.value.clone()]
+        }
         ("herdr:mastracode", "mastracode", AgentSessionRefKind::Id) => {
             vec![
                 "mastracode".into(),
@@ -335,6 +338,7 @@ pub(crate) fn is_official_agent_source(source: &str, agent: &str) -> bool {
             | ("herdr:droid", "droid")
             | ("herdr:kimi", "kimi")
             | ("herdr:omp", "omp")
+            | ("herdr:maki", "maki")
             | ("herdr:mastracode", "mastracode")
             | ("herdr:pi", "pi")
             | ("herdr:hermes", "hermes")
@@ -503,6 +507,16 @@ mod tests {
             .unwrap()
             .argv,
             vec!["droid", "--resume", "droid-session"]
+        );
+        assert_eq!(
+            plan(
+                "herdr:maki",
+                "maki",
+                &AgentSessionRef::id("maki-session").unwrap()
+            )
+            .unwrap()
+            .argv,
+            vec!["maki", "--resume", "maki-session"]
         );
         assert_eq!(
             plan(
@@ -763,6 +777,18 @@ mod tests {
             session_ref_from_report("herdr:kimi", "kimi", Some("kimi-id".into()), None).unwrap();
         assert_eq!(session_ref.kind, AgentSessionRefKind::Id);
         assert_eq!(session_ref.value, "kimi-id");
+
+        let session_ref =
+            session_ref_from_report("herdr:maki", "maki", Some("maki-id".into()), None).unwrap();
+        assert_eq!(session_ref.kind, AgentSessionRefKind::Id);
+        assert_eq!(session_ref.value, "maki-id");
+        assert!(session_ref_from_report(
+            "herdr:maki",
+            "maki",
+            None,
+            Some("/tmp/maki.jsonl".into())
+        )
+        .is_none());
 
         let session_ref = session_ref_from_report(
             "herdr:mastracode",
