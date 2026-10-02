@@ -38,10 +38,7 @@ pub(super) fn render_mode_bar(
     keybinds: &LiveKeybindConfig,
     palette: &Palette,
 ) -> Option<Rect> {
-    let passthrough_chip = mode == ClientShellMode::Terminal;
-    if (mode == ClientShellMode::Terminal && !passthrough_chip && endpoint_error.is_none())
-        || pane_area.is_empty()
-    {
+    if (mode == ClientShellMode::Terminal && endpoint_error.is_none()) || pane_area.is_empty() {
         return None;
     }
 
@@ -63,7 +60,6 @@ pub(super) fn render_mode_bar(
     let mode_chip_bg = match mode {
         ClientShellMode::Resize => palette.mauve,
         ClientShellMode::VimNormal => palette.green,
-        ClientShellMode::Terminal => palette.peach,
         _ => palette.accent,
     };
     let mode_style = Style::default()
@@ -83,8 +79,6 @@ pub(super) fn render_mode_bar(
             (" ERROR ".to_owned(), mode_style),
             (format!(" {error}"), base),
         ]);
-    } else if mode == ClientShellMode::Terminal {
-        segments.extend([(" INSERT ".to_owned(), mode_style)]);
     } else {
         match mode {
             ClientShellMode::VimNormal => {
