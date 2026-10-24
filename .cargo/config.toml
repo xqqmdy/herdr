@@ -1,2 +1,4 @@
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+[env]
+ZIG = "/home/xqqmdy/.local/lib/zig-x86_64-linux-0.16.0/zig"
